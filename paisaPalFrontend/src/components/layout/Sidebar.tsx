@@ -1,11 +1,13 @@
 import { useStore } from '@/store'
-import { LayoutDashboard, Receipt, TrendingUp, Settings, Moon, Sun } from 'lucide-react'
+import { LayoutDashboard, Receipt, TrendingUp, Settings, Moon, Sun, Repeat, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TabId } from '@/types'
 
 const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'transactions', label: 'Transactions', icon: Receipt },
+  { id: 'recurring', label: 'Recurring', icon: Repeat },
+  { id: 'budgets', label: 'Budgets', icon: Wallet },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]

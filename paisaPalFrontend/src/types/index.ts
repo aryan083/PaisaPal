@@ -5,6 +5,7 @@ export const CATEGORIES = [
 
 export type Category = typeof CATEGORIES[number]
 export type PaymentMode = 'Online' | 'Cash'
+export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
 export interface Transaction {
   id: string
@@ -36,7 +37,95 @@ export interface Stats {
   rapidoStats: { total: number; count: number; avgPerRide: number }
 }
 
-export type TabId = 'dashboard' | 'transactions' | 'insights' | 'settings'
+export interface RecurringRule {
+  id: string
+  name: string
+  particulars: string
+  amount: number
+  category: Category
+  mode: PaymentMode
+  notes: string
+  frequency: Frequency
+  dayOfMonth?: number
+  dayOfWeek?: number
+  startDate: string
+  endDate?: string
+  lastGenerated?: string
+  nextDue: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Budget {
+  id: string
+  category: Category
+  monthlyLimit: number
+  month: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BudgetStat {
+  category: Category
+  monthlyLimit: number
+  spent: number
+  remaining: number
+  percentage: number
+  isOverBudget: boolean
+}
+
+export interface BudgetStats {
+  month: string
+  budgets: BudgetStat[]
+  totalBudgeted: number
+  totalSpent: number
+}
+
+export interface TransactionFilters {
+  search?: string
+  category?: Category
+  mode?: PaymentMode
+  startDate?: string
+  endDate?: string
+  minAmount?: number
+  maxAmount?: number
+  hasNotes?: boolean
+  sort?: 'date' | 'amount' | 'category' | 'createdAt' | 'updatedAt'
+  order?: 'asc' | 'desc'
+  page?: number
+  limit?: number
+}
+
+export interface ImportPreview {
+  row: number
+  data: {
+    date: string
+    particulars: string
+    amount: number
+    category: string
+    mode: string
+    notes: string
+  }
+  isDuplicate: boolean
+}
+
+export interface ImportResult {
+  inserted: number
+  failed: number
+  duplicates: number
+  errors: Array<{ row: number; error: string }>
+  duplicateDetails?: Array<{
+    row: number
+    particulars: string
+    amount: number
+    date: string
+    reason: string
+  }>
+  preview?: ImportPreview[]
+}
+
+export type TabId = 'dashboard' | 'transactions' | 'recurring' | 'budgets' | 'insights' | 'settings'
 
 export const CATEGORY_KEY_MAP: Record<Category, string> = {
   'Rapido': 'rapido',

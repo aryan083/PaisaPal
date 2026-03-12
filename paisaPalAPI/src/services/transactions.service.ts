@@ -8,10 +8,32 @@ type ImportError = {
   error: string;
 };
 
+type DuplicateInfo = {
+  row: number;
+  particulars: string;
+  amount: number;
+  date: string;
+  reason: string;
+};
+
 export type ImportCsvResult = {
   inserted: number;
   failed: number;
+  duplicates: number;
   errors: ImportError[];
+  duplicateDetails?: DuplicateInfo[];
+  preview?: Array<{
+    row: number;
+    data: {
+      date: Date;
+      particulars: string;
+      amount: number;
+      category: string;
+      mode: string;
+      notes: string;
+    };
+    isDuplicate: boolean;
+  }>;
 };
 
 type RawRecord = Record<string, unknown>;
@@ -78,6 +100,30 @@ function validateRow(rowNumber: number, record: RawRecord) {
   };
 }
 
+async function checkDuplicates(
+  transactions: Array<{ date: Date; particulars: string; amount: number }>,
+): Promise<Set<number>> {
+  const duplicateIndices = new Set<number>();
+
+  const checks = transactions.map(async (tx, index) => {
+    const existing = await Transaction.findOne({
+      date: {
+        $gte: new Date(tx.date.setHours(0, 0, 0, 0)),
+        $lt: new Date(tx.date.setHours(23, 59, 59, 999)),
+      },
+      particulars: tx.particulars,
+      amount: tx.amount,
+    }).lean();
+
+    if (existing) {
+      duplicateIndices.add(index);
+    }
+  });
+
+  await Promise.all(checks);
+  return duplicateIndices;
+}
+
 async function insertTransactions(transactions: unknown[]) {
   if (transactions.length === 0) {
     return;
@@ -88,10 +134,23 @@ async function insertTransactions(transactions: unknown[]) {
 
 export async function importTransactionsFromCsv(
   csvBuffer: Buffer,
+  options: { dryRun?: boolean; skipDuplicates?: boolean } = {},
 ): Promise<ImportCsvResult> {
+  const { dryRun = false, skipDuplicates = false } = options;
+
   const records = parseCsv(csvBuffer);
   const errors: ImportError[] = [];
-  const valid: unknown[] = [];
+  const valid: Array<{
+    row: number;
+    data: {
+      date: Date;
+      particulars: string;
+      amount: number;
+      category: string;
+      mode: string;
+      notes: string;
+    };
+  }> = [];
 
   for (let i = 0; i < records.length; i += 1) {
     const rowNumber = i + 2;
@@ -100,10 +159,50 @@ export async function importTransactionsFromCsv(
       errors.push(result.error);
       continue;
     }
-    valid.push(result.data);
+    valid.push({ row: rowNumber, data: result.data });
   }
 
-  await insertTransactions(valid);
+  const duplicateDetails: DuplicateInfo[] = [];
+  let duplicates = 0;
 
-  return { inserted: valid.length, failed: errors.length, errors };
+  // Check for duplicates
+  const duplicateIndices = await checkDuplicates(valid.map((v) => v.data));
+
+  const preview = valid.map((v, index) => ({
+    row: v.row,
+    data: v.data,
+    isDuplicate: duplicateIndices.has(index),
+  }));
+
+  const toInsert = skipDuplicates
+    ? valid.filter((_, index) => !duplicateIndices.has(index))
+    : valid;
+
+  duplicates = duplicateIndices.size;
+
+  for (const index of duplicateIndices) {
+    const v = valid[index];
+    if (v) {
+      duplicateDetails.push({
+        row: v.row,
+        particulars: v.data.particulars,
+        amount: v.data.amount,
+        date: v.data.date.toISOString().split('T')[0] ?? '',
+        reason: 'Matching date, particulars, and amount found',
+      });
+    }
+  }
+
+  if (!dryRun && toInsert.length > 0) {
+    await insertTransactions(toInsert.map((v) => v.data));
+  }
+
+  return {
+    inserted: dryRun ? 0 : toInsert.length,
+    failed: errors.length,
+    duplicates,
+    errors,
+    duplicateDetails,
+    preview: dryRun ? preview : undefined,
+  };
 }

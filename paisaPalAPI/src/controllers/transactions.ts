@@ -21,6 +21,36 @@ export async function listTransactions(req: Request, res: Response) {
     filter.category = query.category;
   }
 
+  if (query.mode) {
+    filter.mode = query.mode;
+  }
+
+  if (query.startDate || query.endDate) {
+    filter.date = {};
+    if (query.startDate) {
+      (filter.date as Record<string, Date>).$gte = query.startDate;
+    }
+    if (query.endDate) {
+      (filter.date as Record<string, Date>).$lte = query.endDate;
+    }
+  }
+
+  if (query.minAmount !== undefined || query.maxAmount !== undefined) {
+    filter.amount = {};
+    if (query.minAmount !== undefined) {
+      (filter.amount as Record<string, number>).$gte = query.minAmount;
+    }
+    if (query.maxAmount !== undefined) {
+      (filter.amount as Record<string, number>).$lte = query.maxAmount;
+    }
+  }
+
+  if (query.hasNotes === true) {
+    filter.notes = { $ne: '', $exists: true };
+  } else if (query.hasNotes === false) {
+    filter.$or = [{ notes: '' }, { notes: { $exists: false } }];
+  }
+
   const sortDirection = query.order === 'asc' ? 1 : -1;
   const skip = (query.page - 1) * query.limit;
 
@@ -130,10 +160,95 @@ export async function importTransactionsCsv(req: Request, res: Response) {
     });
   }
 
-  const result = await importTransactionsFromCsv(file.buffer);
+  const dryRun = req.query.dryRun === 'true';
+  const skipDuplicates = req.query.skipDuplicates === 'true';
+
+  const result = await importTransactionsFromCsv(file.buffer, {
+    dryRun,
+    skipDuplicates,
+  });
 
   return res.status(200).json({
     data: result,
     error: null,
+    message: dryRun
+      ? 'Preview completed - no transactions inserted'
+      : `Imported ${result.inserted} transactions`,
   });
+}
+
+export async function exportTransactionsCsv(req: Request, res: Response) {
+  await connectDB();
+
+  const query = req.query as unknown as QueryParams;
+
+  const filter: Record<string, unknown> = {};
+  if (query.search) {
+    filter.$or = [
+      { particulars: { $regex: query.search, $options: 'i' } },
+      { notes: { $regex: query.search, $options: 'i' } },
+    ];
+  }
+
+  if (query.category) {
+    filter.category = query.category;
+  }
+
+  if (query.mode) {
+    filter.mode = query.mode;
+  }
+
+  if (query.startDate || query.endDate) {
+    filter.date = {};
+    if (query.startDate) {
+      (filter.date as Record<string, Date>).$gte = query.startDate;
+    }
+    if (query.endDate) {
+      (filter.date as Record<string, Date>).$lte = query.endDate;
+    }
+  }
+
+  if (query.minAmount !== undefined || query.maxAmount !== undefined) {
+    filter.amount = {};
+    if (query.minAmount !== undefined) {
+      (filter.amount as Record<string, number>).$gte = query.minAmount;
+    }
+    if (query.maxAmount !== undefined) {
+      (filter.amount as Record<string, number>).$lte = query.maxAmount;
+    }
+  }
+
+  if (query.hasNotes === true) {
+    filter.notes = { $ne: '', $exists: true };
+  } else if (query.hasNotes === false) {
+    filter.$or = [{ notes: '' }, { notes: { $exists: false } }];
+  }
+
+  const sortDirection = query.order === 'asc' ? 1 : -1;
+
+  const transactions = await Transaction.find(filter)
+    .sort({ [query.sort]: sortDirection })
+    .limit(10000)
+    .lean();
+
+  // Generate CSV
+  const header = 'date,particulars,amount,category,mode,notes\n';
+  const rows = transactions
+    .map((tx) => {
+      const date = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : '';
+      const particulars = `"${(tx.particulars ?? '').replace(/"/g, '""')}"`;
+      const amount = tx.amount ?? 0;
+      const category = tx.category ?? '';
+      const mode = tx.mode ?? '';
+      const notes = `"${(tx.notes ?? '').replace(/"/g, '""')}"`;
+      return `${date},${particulars},${amount},${category},${mode},${notes}`;
+    })
+    .join('\n');
+
+  const csv = header + rows;
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="transactions-${new Date().toISOString().split('T')[0]}.csv"`);
+
+  return res.status(200).send(csv);
 }

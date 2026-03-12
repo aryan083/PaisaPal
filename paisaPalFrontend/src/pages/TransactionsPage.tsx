@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { CATEGORIES, CATEGORY_HEX, type Category } from '@/types'
-import { Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle } from 'lucide-react'
+import { CATEGORIES, CATEGORY_HEX, type Category, type PaymentMode } from '@/types'
+import { Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { BulkImport } from '@/components/transactions/BulkImport'
+import { exportTransactionsCsv } from '@/lib/api'
 import { toast } from 'sonner'
 
 type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
@@ -19,6 +20,13 @@ export function TransactionsPage() {
   const [bulkOpen, setBulkOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [modeFilter, setModeFilter] = useState<PaymentMode | 'All'>('All')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [minAmount, setMinAmount] = useState('')
+  const [maxAmount, setMaxAmount] = useState('')
+  const [hasNotes, setHasNotes] = useState<'All' | 'yes' | 'no'>('All')
 
   const filtered = useMemo(() => {
     let result = [...transactions]
@@ -32,6 +40,26 @@ export function TransactionsPage() {
     if (categoryFilter !== 'All') {
       result = result.filter(t => t.category === categoryFilter)
     }
+    if (modeFilter !== 'All') {
+      result = result.filter(t => t.mode === modeFilter)
+    }
+    if (startDate) {
+      result = result.filter(t => t.date >= startDate)
+    }
+    if (endDate) {
+      result = result.filter(t => t.date <= endDate)
+    }
+    if (minAmount) {
+      result = result.filter(t => t.amount >= parseFloat(minAmount))
+    }
+    if (maxAmount) {
+      result = result.filter(t => t.amount <= parseFloat(maxAmount))
+    }
+    if (hasNotes === 'yes') {
+      result = result.filter(t => t.notes && t.notes.trim().length > 0)
+    } else if (hasNotes === 'no') {
+      result = result.filter(t => !t.notes || t.notes.trim().length === 0)
+    }
     result.sort((a, b) => {
       switch (sort) {
         case 'date-desc': return new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -41,7 +69,46 @@ export function TransactionsPage() {
       }
     })
     return result
-  }, [transactions, search, categoryFilter, sort])
+  }, [transactions, search, categoryFilter, sort, modeFilter, startDate, endDate, minAmount, maxAmount, hasNotes])
+
+  const handleExport = async () => {
+    try {
+      const csv = await exportTransactionsCsv({
+        search: search || undefined,
+        category: categoryFilter !== 'All' ? categoryFilter : undefined,
+        mode: modeFilter !== 'All' ? modeFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        minAmount: minAmount ? parseFloat(minAmount) : undefined,
+        maxAmount: maxAmount ? parseFloat(maxAmount) : undefined,
+        hasNotes: hasNotes !== 'All' ? hasNotes === 'yes' : undefined,
+      })
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `transactions-${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Exported transactions to CSV')
+    } catch (err) {
+      toast.error('Failed to export transactions')
+      console.error(err)
+    }
+  }
+
+  const clearFilters = () => {
+    setSearch('')
+    setCategoryFilter('All')
+    setModeFilter('All')
+    setStartDate('')
+    setEndDate('')
+    setMinAmount('')
+    setMaxAmount('')
+    setHasNotes('All')
+  }
+
+  const hasActiveFilters = search || categoryFilter !== 'All' || modeFilter !== 'All' || startDate || endDate || minAmount || maxAmount || hasNotes !== 'All'
 
   const handleDelete = (id: string) => {
     if (deletingId === id) {
@@ -101,19 +168,124 @@ export function TransactionsPage() {
         <h1 className="text-display text-2xl font-bold text-foreground">Transactions</h1>
         <div className="hidden sm:flex items-center gap-2">
           <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${showFilters || hasActiveFilters ? 'bg-primary/10 text-primary' : 'bg-secondary text-foreground hover:bg-muted'}`}
+          >
+            <Filter className="h-4 w-4" /> Filters
+            {hasActiveFilters && <span className="h-2 w-2 rounded-full bg-primary" />}
+          </button>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            <Download className="h-4 w-4" /> Export
+          </button>
+          <button
             onClick={() => setBulkOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
           >
-            <Upload className="h-4 w-4" /> Bulk Import
+            <Upload className="h-4 w-4" /> Import
           </button>
           <button
             onClick={() => openForm()}
             className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
-            <Plus className="h-4 w-4" /> Add Transaction
+            <Plus className="h-4 w-4" /> Add
           </button>
         </div>
       </div>
+
+      {/* Advanced Filters Panel */}
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-4 overflow-hidden"
+          >
+            <div className="card-base p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">Advanced Filters</span>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" /> Clear all
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Min Amount</label>
+                  <input
+                    type="number"
+                    value={minAmount}
+                    onChange={e => setMinAmount(e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Max Amount</label>
+                  <input
+                    type="number"
+                    value={maxAmount}
+                    onChange={e => setMaxAmount(e.target.value)}
+                    placeholder="∞"
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Mode:</label>
+                  <select
+                    value={modeFilter}
+                    onChange={e => setModeFilter(e.target.value as PaymentMode | 'All')}
+                    className="rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                  >
+                    <option value="All">All</option>
+                    <option value="Online">Online</option>
+                    <option value="Cash">Cash</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Notes:</label>
+                  <select
+                    value={hasNotes}
+                    onChange={e => setHasNotes(e.target.value as 'All' | 'yes' | 'no')}
+                    className="rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                  >
+                    <option value="All">All</option>
+                    <option value="yes">With Notes</option>
+                    <option value="no">No Notes</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bulk selection bar */}
       {selectedIds.size > 0 && (
