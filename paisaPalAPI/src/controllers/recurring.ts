@@ -3,11 +3,14 @@ import { connectDB } from '../lib/mongodb';
 import RecurringRule, { type IRecurringRule } from '../models/RecurringRule';
 import type { RecurringRuleInput, RecurringRuleUpdateInput } from '../schemas';
 import { calculateNextDueDate, materializeRecurringTransactions } from '../services/recurring.service';
+import { createAuditLog } from '../lib/audit';
 
 export async function listRecurringRules(req: Request, res: Response) {
   await connectDB();
 
-  const rules = await RecurringRule.find()
+  const userId = req.user!.userId;
+
+  const rules = await RecurringRule.find({ userId })
     .sort({ nextDue: 1 })
     .lean();
 
@@ -20,7 +23,8 @@ export async function listRecurringRules(req: Request, res: Response) {
 export async function getRecurringRule(req: Request, res: Response) {
   await connectDB();
 
-  const rule = await RecurringRule.findById(req.params.id).lean();
+  const userId = req.user!.userId;
+  const rule = await RecurringRule.findOne({ _id: req.params.id, userId }).lean();
 
   if (!rule) {
     return res.status(404).json({
@@ -39,6 +43,7 @@ export async function createRecurringRule(req: Request, res: Response) {
   await connectDB();
 
   const body = req.body as RecurringRuleInput;
+  const userId = req.user!.userId;
 
   const nextDue = calculateNextDueDate({
     ...body,
@@ -47,7 +52,17 @@ export async function createRecurringRule(req: Request, res: Response) {
 
   const rule = await RecurringRule.create({
     ...body,
+    userId,
     nextDue,
+  });
+
+  createAuditLog({
+    userId,
+    action: 'CREATE',
+    resource: 'recurring',
+    resourceId: rule._id.toString(),
+    after: rule.toObject() as unknown as Record<string, unknown>,
+    req,
   });
 
   return res.status(201).json({
@@ -61,8 +76,9 @@ export async function updateRecurringRule(req: Request, res: Response) {
   await connectDB();
 
   const body = req.body as RecurringRuleUpdateInput;
+  const userId = req.user!.userId;
 
-  const existing = await RecurringRule.findById(req.params.id);
+  const existing = await RecurringRule.findOne({ _id: req.params.id, userId });
 
   if (!existing) {
     return res.status(404).json({
@@ -71,17 +87,29 @@ export async function updateRecurringRule(req: Request, res: Response) {
     });
   }
 
+  const before = existing.toObject() as unknown as Record<string, unknown>;
+
   // Recalculate nextDue if frequency-related fields changed
   if (body.frequency || body.dayOfMonth !== undefined || body.dayOfWeek !== undefined) {
     const updated = { ...existing.toObject(), ...body } as unknown as IRecurringRule;
     (body as Record<string, unknown>).nextDue = calculateNextDueDate(updated, existing.startDate);
   }
 
-  const updated = await RecurringRule.findByIdAndUpdate(
-    req.params.id,
+  const updated = await RecurringRule.findOneAndUpdate(
+    { _id: req.params.id, userId },
     body,
     { new: true, runValidators: true },
   ).lean();
+
+  createAuditLog({
+    userId,
+    action: 'UPDATE',
+    resource: 'recurring',
+    resourceId: req.params.id,
+    before,
+    after: updated ? (updated as unknown as Record<string, unknown>) : undefined,
+    req,
+  });
 
   return res.status(200).json({
     data: updated,
@@ -92,7 +120,9 @@ export async function updateRecurringRule(req: Request, res: Response) {
 export async function deleteRecurringRule(req: Request, res: Response) {
   await connectDB();
 
-  const deleted = await RecurringRule.findByIdAndDelete(req.params.id).lean();
+  const userId = req.user!.userId;
+
+  const deleted = await RecurringRule.findOneAndDelete({ _id: req.params.id, userId }).lean();
 
   if (!deleted) {
     return res.status(404).json({
@@ -100,6 +130,15 @@ export async function deleteRecurringRule(req: Request, res: Response) {
       error: 'Recurring rule not found',
     });
   }
+
+  createAuditLog({
+    userId,
+    action: 'DELETE',
+    resource: 'recurring',
+    resourceId: deleted._id.toString(),
+    before: deleted as Record<string, unknown>,
+    req,
+  });
 
   return res.status(200).json({
     data: null,
@@ -150,9 +189,10 @@ export async function previewRecurringRule(req: Request, res: Response) {
 export async function runRecurringRules(req: Request, res: Response) {
   await connectDB();
 
+  const userId = req.user!.userId;
   const dryRun = req.query.dryRun === 'true';
 
-  const result = await materializeRecurringTransactions(dryRun);
+  const result = await materializeRecurringTransactions(dryRun, userId);
 
   return res.status(200).json({
     data: result,

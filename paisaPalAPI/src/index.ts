@@ -2,12 +2,12 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import morgan from 'morgan';
 import type { Request, Response } from 'express';
 
 import apiRoutes from './routes';
 import { errorHandler } from './lib/errorHandler';
 import { notFound } from './middleware/notFound';
+import { requestLogger } from './lib/logger';
 
 const app = express();
 
@@ -22,7 +22,7 @@ app.use(
 
 app.use(express.json({ limit: '10kb' }));
 
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(requestLogger);
 
 app.use(
   '/api',

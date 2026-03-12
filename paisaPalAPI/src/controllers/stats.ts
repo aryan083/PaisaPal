@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { connectDB } from '../lib/mongodb';
 import Transaction from '../models/Transaction';
 
@@ -18,10 +19,13 @@ type ModeAgg = {
   total: number;
 };
 
-export async function getStats(_req: Request, res: Response) {
+export async function getStats(req: Request, res: Response) {
   await connectDB();
 
+  const userId = new mongoose.Types.ObjectId(req.user!.userId);
+
   const [totalAgg] = await Transaction.aggregate<{ totalSpent: number }>([
+    { $match: { userId } },
     { $group: { _id: null, totalSpent: { $sum: '$amount' } } },
     { $project: { _id: 0, totalSpent: 1 } },
   ]);
@@ -29,6 +33,7 @@ export async function getStats(_req: Request, res: Response) {
   const totalSpent = totalAgg?.totalSpent ?? 0;
 
   const byCategory = await Transaction.aggregate<CategoryAgg>([
+    { $match: { userId } },
     {
       $group: {
         _id: '$category',
@@ -40,6 +45,7 @@ export async function getStats(_req: Request, res: Response) {
   ]);
 
   const byDate = await Transaction.aggregate<DateAgg>([
+    { $match: { userId } },
     {
       $group: {
         _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
@@ -50,6 +56,7 @@ export async function getStats(_req: Request, res: Response) {
   ]);
 
   const byModeArr = await Transaction.aggregate<ModeAgg>([
+    { $match: { userId } },
     { $group: { _id: '$mode', total: { $sum: '$amount' } } },
   ]);
 
@@ -61,9 +68,10 @@ export async function getStats(_req: Request, res: Response) {
     }
   }
 
-  const transactionCount = await Transaction.countDocuments({});
+  const transactionCount = await Transaction.countDocuments({ userId });
 
   const [activeDaysAgg] = await Transaction.aggregate<{ activeDays: number }>([
+    { $match: { userId } },
     {
       $group: {
         _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
@@ -76,6 +84,7 @@ export async function getStats(_req: Request, res: Response) {
   const dailyAverage = activeDays === 0 ? 0 : Math.round(totalSpent / activeDays);
 
   const [biggestDayAgg] = await Transaction.aggregate<{ date: string; total: number }>([
+    { $match: { userId } },
     {
       $group: {
         _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
@@ -89,10 +98,10 @@ export async function getStats(_req: Request, res: Response) {
 
   const biggestDay = biggestDayAgg ?? null;
 
-  const biggestTransaction = await Transaction.findOne({}).sort({ amount: -1 }).lean();
+  const biggestTransaction = await Transaction.findOne({ userId }).sort({ amount: -1 }).lean();
 
   const [rapidoAgg] = await Transaction.aggregate<{ total: number; count: number }>([
-    { $match: { category: 'Rapido' } },
+    { $match: { userId, category: 'Rapido' } },
     { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
     { $project: { _id: 0, total: 1, count: 1 } },
   ]);

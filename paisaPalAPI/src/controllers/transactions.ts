@@ -3,13 +3,15 @@ import { connectDB } from '../lib/mongodb';
 import Transaction from '../models/Transaction';
 import type { QueryParams, TransactionInput, TransactionUpdateInput } from '../schemas';
 import { importTransactionsFromCsv } from '../services/transactions.service';
+import { createAuditLog } from '../lib/audit';
 
 export async function listTransactions(req: Request, res: Response) {
   await connectDB();
 
   const query = req.query as unknown as QueryParams;
+  const userId = req.user!.userId;
 
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { userId };
   if (query.search) {
     filter.$or = [
       { particulars: { $regex: query.search, $options: 'i' } },
@@ -80,7 +82,18 @@ export async function createTransaction(req: Request, res: Response) {
   await connectDB();
 
   const body = req.body as TransactionInput;
-  const created = await Transaction.create(body);
+  const userId = req.user!.userId;
+
+  const created = await Transaction.create({ ...body, userId });
+
+  createAuditLog({
+    userId,
+    action: 'CREATE',
+    resource: 'transaction',
+    resourceId: created._id.toString(),
+    after: created.toObject() as unknown as Record<string, unknown>,
+    req,
+  });
 
   return res.status(201).json({
     data: created,
@@ -92,7 +105,8 @@ export async function createTransaction(req: Request, res: Response) {
 export async function getTransaction(req: Request, res: Response) {
   await connectDB();
 
-  const transaction = await Transaction.findById(req.params.id).lean();
+  const userId = req.user!.userId;
+  const transaction = await Transaction.findOne({ _id: req.params.id, userId }).lean();
 
   if (!transaction) {
     return res.status(404).json({
@@ -111,11 +125,21 @@ export async function updateTransaction(req: Request, res: Response) {
   await connectDB();
 
   const body = req.body as TransactionUpdateInput;
+  const userId = req.user!.userId;
 
-  const updated = await Transaction.findByIdAndUpdate(req.params.id, body, {
-    new: true,
-    runValidators: true,
-  }).lean();
+  const before = await Transaction.findOne({ _id: req.params.id, userId }).lean();
+  if (!before) {
+    return res.status(404).json({
+      data: null,
+      error: 'Transaction not found',
+    });
+  }
+
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: req.params.id, userId },
+    body,
+    { new: true, runValidators: true }
+  ).lean();
 
   if (!updated) {
     return res.status(404).json({
@@ -123,6 +147,16 @@ export async function updateTransaction(req: Request, res: Response) {
       error: 'Transaction not found',
     });
   }
+
+  createAuditLog({
+    userId,
+    action: 'UPDATE',
+    resource: 'transaction',
+    resourceId: updated._id.toString(),
+    before,
+    after: updated,
+    req,
+  });
 
   return res.status(200).json({
     data: updated,
@@ -133,7 +167,9 @@ export async function updateTransaction(req: Request, res: Response) {
 export async function deleteTransaction(req: Request, res: Response) {
   await connectDB();
 
-  const deleted = await Transaction.findByIdAndDelete(req.params.id).lean();
+  const userId = req.user!.userId;
+
+  const deleted = await Transaction.findOneAndDelete({ _id: req.params.id, userId }).lean();
 
   if (!deleted) {
     return res.status(404).json({
@@ -141,6 +177,15 @@ export async function deleteTransaction(req: Request, res: Response) {
       error: 'Transaction not found',
     });
   }
+
+  createAuditLog({
+    userId,
+    action: 'DELETE',
+    resource: 'transaction',
+    resourceId: deleted._id.toString(),
+    before: deleted,
+    req,
+  });
 
   return res.status(200).json({
     data: null,
@@ -162,10 +207,12 @@ export async function importTransactionsCsv(req: Request, res: Response) {
 
   const dryRun = req.query.dryRun === 'true';
   const skipDuplicates = req.query.skipDuplicates === 'true';
+  const userId = req.user!.userId;
 
   const result = await importTransactionsFromCsv(file.buffer, {
     dryRun,
     skipDuplicates,
+    userId,
   });
 
   return res.status(200).json({
@@ -181,8 +228,9 @@ export async function exportTransactionsCsv(req: Request, res: Response) {
   await connectDB();
 
   const query = req.query as unknown as QueryParams;
+  const userId = req.user!.userId;
 
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { userId };
   if (query.search) {
     filter.$or = [
       { particulars: { $regex: query.search, $options: 'i' } },

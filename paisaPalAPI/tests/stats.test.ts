@@ -3,9 +3,18 @@ import request from 'supertest';
 import type { Application } from 'express';
 
 import Transaction from '@/models/Transaction';
-import { clearDatabase, startInMemoryMongo, stopInMemoryMongo } from './testUtils';
+import {
+  authHeaders,
+  clearDatabase,
+  createTestUser,
+  generateTestToken,
+  startInMemoryMongo,
+  stopInMemoryMongo,
+  TEST_USER_ID,
+} from './testUtils';
 
 let app: Application;
+let token: string;
 
 describe('stats API', () => {
   beforeAll(async () => {
@@ -16,6 +25,8 @@ describe('stats API', () => {
 
   beforeEach(async () => {
     await clearDatabase();
+    await createTestUser();
+    token = generateTestToken();
 
     await Transaction.insertMany([
       {
@@ -25,6 +36,7 @@ describe('stats API', () => {
         category: 'Rapido',
         mode: 'Online',
         notes: '',
+        userId: TEST_USER_ID,
       },
       {
         date: new Date('2026-03-01'),
@@ -33,6 +45,7 @@ describe('stats API', () => {
         category: 'Food & Drinks',
         mode: 'Cash',
         notes: '',
+        userId: TEST_USER_ID,
       },
       {
         date: new Date('2026-03-02'),
@@ -41,6 +54,7 @@ describe('stats API', () => {
         category: 'Rapido',
         mode: 'Online',
         notes: '',
+        userId: TEST_USER_ID,
       },
     ]);
   });
@@ -50,7 +64,9 @@ describe('stats API', () => {
   });
 
   it('returns correct totals and rapido stats', async () => {
-    const res = await request(app).get('/api/stats');
+    const res = await request(app)
+      .get('/api/stats')
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
 
     const data = res.body.data;

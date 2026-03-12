@@ -1,11 +1,21 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Application } from 'express';
 import request from 'supertest';
 
 import app from '../src/index';
 import Budget from '../src/models/Budget';
 import Transaction from '../src/models/Transaction';
-import { clearDatabase, startInMemoryMongo, stopInMemoryMongo } from './testUtils';
+import {
+  authHeaders,
+  clearDatabase,
+  createTestUser,
+  generateTestToken,
+  startInMemoryMongo,
+  stopInMemoryMongo,
+  TEST_USER_ID,
+} from './testUtils';
+
+let token: string;
 
 describe('budgets API', () => {
   beforeAll(async () => {
@@ -20,9 +30,16 @@ describe('budgets API', () => {
     await clearDatabase();
   });
 
+  beforeEach(async () => {
+    await createTestUser();
+    token = generateTestToken();
+  });
+
   describe('list budgets', () => {
     it('returns empty list when no budgets exist', async () => {
-      const res = await request(app).get('/api/budgets');
+      const res = await request(app)
+        .get('/api/budgets')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -34,15 +51,19 @@ describe('budgets API', () => {
           category: 'Food & Drinks',
           monthlyLimit: 5000,
           month: '2026-03',
+          userId: TEST_USER_ID,
         },
         {
           category: 'Shopping',
           monthlyLimit: 3000,
           month: '2026-04',
+          userId: TEST_USER_ID,
         },
       ]);
 
-      const res = await request(app).get('/api/budgets?month=2026-03');
+      const res = await request(app)
+        .get('/api/budgets?month=2026-03')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -54,6 +75,7 @@ describe('budgets API', () => {
     it('creates a budget for a category and month', async () => {
       const res = await request(app)
         .post('/api/budgets')
+        .set(authHeaders(token))
         .send({
           category: 'Food & Drinks',
           monthlyLimit: 5000,
@@ -70,10 +92,12 @@ describe('budgets API', () => {
         category: 'Food & Drinks',
         monthlyLimit: 5000,
         month: '2026-03',
+        userId: TEST_USER_ID,
       });
 
       const res = await request(app)
         .post('/api/budgets')
+        .set(authHeaders(token))
         .send({
           category: 'Food & Drinks',
           monthlyLimit: 6000,
@@ -87,6 +111,7 @@ describe('budgets API', () => {
     it('validates month format', async () => {
       const res = await request(app)
         .post('/api/budgets')
+        .set(authHeaders(token))
         .send({
           category: 'Food & Drinks',
           monthlyLimit: 5000,
@@ -103,16 +128,21 @@ describe('budgets API', () => {
         category: 'Food & Drinks',
         monthlyLimit: 5000,
         month: '2026-03',
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).get(`/api/budgets/${budget._id}`);
+      const res = await request(app)
+        .get(`/api/budgets/${budget._id}`)
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data.category).toBe('Food & Drinks');
     });
 
     it('returns 404 for non-existent budget', async () => {
-      const res = await request(app).get('/api/budgets/507f1f77bcf86cd799439011');
+      const res = await request(app)
+        .get('/api/budgets/507f1f77bcf86cd799439012')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(404);
     });
@@ -124,10 +154,12 @@ describe('budgets API', () => {
         category: 'Food & Drinks',
         monthlyLimit: 5000,
         month: '2026-03',
+        userId: TEST_USER_ID,
       });
 
       const res = await request(app)
         .put(`/api/budgets/${budget._id}`)
+        .set(authHeaders(token))
         .send({ monthlyLimit: 6000 });
 
       expect(res.status).toBe(200);
@@ -141,9 +173,12 @@ describe('budgets API', () => {
         category: 'Food & Drinks',
         monthlyLimit: 5000,
         month: '2026-03',
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).delete(`/api/budgets/${budget._id}`);
+      const res = await request(app)
+        .delete(`/api/budgets/${budget._id}`)
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Budget deleted');
@@ -157,11 +192,13 @@ describe('budgets API', () => {
           category: 'Food & Drinks',
           monthlyLimit: 5000,
           month: '2026-03',
+          userId: TEST_USER_ID,
         },
         {
           category: 'Shopping',
           monthlyLimit: 3000,
           month: '2026-03',
+          userId: TEST_USER_ID,
         },
       ]);
 
@@ -172,6 +209,7 @@ describe('budgets API', () => {
           amount: 100,
           category: 'Food & Drinks',
           mode: 'Online',
+          userId: TEST_USER_ID,
         },
         {
           date: new Date('2026-03-10'),
@@ -179,6 +217,7 @@ describe('budgets API', () => {
           amount: 500,
           category: 'Food & Drinks',
           mode: 'Cash',
+          userId: TEST_USER_ID,
         },
         {
           date: new Date('2026-03-15'),
@@ -186,10 +225,13 @@ describe('budgets API', () => {
           amount: 2000,
           category: 'Shopping',
           mode: 'Online',
+          userId: TEST_USER_ID,
         },
       ]);
 
-      const res = await request(app).get('/api/budgets/stats?month=2026-03');
+      const res = await request(app)
+        .get('/api/budgets/stats?month=2026-03')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data.month).toBe('2026-03');
@@ -210,6 +252,7 @@ describe('budgets API', () => {
         category: 'Food & Drinks',
         monthlyLimit: 100,
         month: '2026-03',
+        userId: TEST_USER_ID,
       });
 
       await Transaction.create({
@@ -218,9 +261,12 @@ describe('budgets API', () => {
         amount: 500,
         category: 'Food & Drinks',
         mode: 'Online',
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).get('/api/budgets/stats?month=2026-03');
+      const res = await request(app)
+        .get('/api/budgets/stats?month=2026-03')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
 
@@ -238,9 +284,12 @@ describe('budgets API', () => {
         amount: 50,
         category: 'Bus/GSRTC',
         mode: 'Cash',
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).get('/api/budgets/stats?month=2026-03');
+      const res = await request(app)
+        .get('/api/budgets/stats?month=2026-03')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
 
@@ -254,14 +303,18 @@ describe('budgets API', () => {
     });
 
     it('requires month parameter', async () => {
-      const res = await request(app).get('/api/budgets/stats');
+      const res = await request(app)
+        .get('/api/budgets/stats')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Month parameter is required in YYYY-MM format');
     });
 
     it('validates month format', async () => {
-      const res = await request(app).get('/api/budgets/stats?month=2026/03');
+      const res = await request(app)
+        .get('/api/budgets/stats?month=2026/03')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(400);
     });

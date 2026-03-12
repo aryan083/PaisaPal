@@ -1,11 +1,21 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Application } from 'express';
 import request from 'supertest';
 
 import app from '../src/index';
 import RecurringRule from '../src/models/RecurringRule';
 import Transaction from '../src/models/Transaction';
-import { clearDatabase, startInMemoryMongo, stopInMemoryMongo } from './testUtils';
+import {
+  authHeaders,
+  clearDatabase,
+  createTestUser,
+  generateTestToken,
+  startInMemoryMongo,
+  stopInMemoryMongo,
+  TEST_USER_ID,
+} from './testUtils';
+
+let token: string;
 
 describe('recurring rules API', () => {
   beforeAll(async () => {
@@ -20,9 +30,16 @@ describe('recurring rules API', () => {
     await clearDatabase();
   });
 
+  beforeEach(async () => {
+    await createTestUser();
+    token = generateTestToken();
+  });
+
   describe('list rules', () => {
     it('returns empty list when no rules exist', async () => {
-      const res = await request(app).get('/api/recurring');
+      const res = await request(app)
+        .get('/api/recurring')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -41,6 +58,7 @@ describe('recurring rules API', () => {
           startDate: new Date('2026-01-01'),
           nextDue: new Date('2026-04-01'),
           isActive: true,
+          userId: TEST_USER_ID,
         },
         {
           name: 'Weekly Recharge',
@@ -53,10 +71,13 @@ describe('recurring rules API', () => {
           startDate: new Date('2026-01-01'),
           nextDue: new Date('2026-03-15'),
           isActive: true,
+          userId: TEST_USER_ID,
         },
       ]);
 
-      const res = await request(app).get('/api/recurring');
+      const res = await request(app)
+        .get('/api/recurring')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(2);
@@ -69,6 +90,7 @@ describe('recurring rules API', () => {
     it('creates a monthly recurring rule', async () => {
       const res = await request(app)
         .post('/api/recurring')
+        .set(authHeaders(token))
         .send({
           name: 'Monthly Rent',
           particulars: 'Rent payment',
@@ -89,6 +111,7 @@ describe('recurring rules API', () => {
     it('creates a weekly recurring rule', async () => {
       const res = await request(app)
         .post('/api/recurring')
+        .set(authHeaders(token))
         .send({
           name: 'Weekly Groceries',
           particulars: 'Grocery shopping',
@@ -108,6 +131,7 @@ describe('recurring rules API', () => {
     it('validates required fields', async () => {
       const res = await request(app)
         .post('/api/recurring')
+        .set(authHeaders(token))
         .send({
           name: 'Invalid Rule',
         });
@@ -129,16 +153,21 @@ describe('recurring rules API', () => {
         startDate: new Date('2026-01-01'),
         nextDue: new Date('2026-04-01'),
         isActive: true,
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).get(`/api/recurring/${rule._id}`);
+      const res = await request(app)
+        .get(`/api/recurring/${rule._id}`)
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data.name).toBe('Monthly Rent');
     });
 
     it('returns 404 for non-existent rule', async () => {
-      const res = await request(app).get('/api/recurring/507f1f77bcf86cd799439011');
+      const res = await request(app)
+        .get('/api/recurring/507f1f77bcf86cd799439012')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('Recurring rule not found');
@@ -158,10 +187,12 @@ describe('recurring rules API', () => {
         startDate: new Date('2026-01-01'),
         nextDue: new Date('2026-04-01'),
         isActive: true,
+        userId: TEST_USER_ID,
       });
 
       const res = await request(app)
         .put(`/api/recurring/${rule._id}`)
+        .set(authHeaders(token))
         .send({ amount: 12000 });
 
       expect(res.status).toBe(200);
@@ -180,10 +211,12 @@ describe('recurring rules API', () => {
         startDate: new Date('2026-01-01'),
         nextDue: new Date('2026-04-01'),
         isActive: true,
+        userId: TEST_USER_ID,
       });
 
       const res = await request(app)
         .put(`/api/recurring/${rule._id}`)
+        .set(authHeaders(token))
         .send({ isActive: false });
 
       expect(res.status).toBe(200);
@@ -204,9 +237,12 @@ describe('recurring rules API', () => {
         startDate: new Date('2026-01-01'),
         nextDue: new Date('2026-04-01'),
         isActive: true,
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).delete(`/api/recurring/${rule._id}`);
+      const res = await request(app)
+        .delete(`/api/recurring/${rule._id}`)
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Recurring rule deleted');
@@ -216,7 +252,9 @@ describe('recurring rules API', () => {
     });
 
     it('returns 404 for non-existent rule', async () => {
-      const res = await request(app).delete('/api/recurring/507f1f77bcf86cd799439011');
+      const res = await request(app)
+        .delete('/api/recurring/507f1f77bcf86cd799439012')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(404);
     });
@@ -226,6 +264,7 @@ describe('recurring rules API', () => {
     it('previews next occurrences for a monthly rule', async () => {
       const res = await request(app)
         .post('/api/recurring/preview')
+        .set(authHeaders(token))
         .send({
           name: 'Monthly Rent',
           particulars: 'Rent payment',
@@ -245,6 +284,7 @@ describe('recurring rules API', () => {
     it('respects endDate in preview', async () => {
       const res = await request(app)
         .post('/api/recurring/preview')
+        .set(authHeaders(token))
         .send({
           name: 'Temporary',
           particulars: 'Temp',
@@ -275,9 +315,12 @@ describe('recurring rules API', () => {
         startDate: new Date('2020-01-01'),
         nextDue: new Date('2026-03-01'),
         isActive: true,
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).get('/api/recurring/run?dryRun=true');
+      const res = await request(app)
+        .get('/api/recurring/run?dryRun=true')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data.created).toBeGreaterThan(0);
@@ -302,9 +345,12 @@ describe('recurring rules API', () => {
         startDate: new Date('2020-01-01'),
         nextDue: today,
         isActive: true,
+        userId: TEST_USER_ID,
       });
 
-      const res = await request(app).get('/api/recurring/run');
+      const res = await request(app)
+        .get('/api/recurring/run')
+        .set(authHeaders(token));
 
       expect(res.status).toBe(200);
       expect(res.body.data.created).toBeGreaterThan(0);

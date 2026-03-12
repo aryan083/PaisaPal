@@ -11,9 +11,12 @@ import {
 } from '../controllers/transactions';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validate } from '../middleware/validate';
+import { requireAuth } from '../middleware/auth';
 import { QueryParamsSchema, TransactionSchema, TransactionUpdateSchema } from '../schemas';
 
 const router = Router();
+
+router.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),

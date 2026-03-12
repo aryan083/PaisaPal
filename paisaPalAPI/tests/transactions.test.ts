@@ -3,9 +3,18 @@ import request from 'supertest';
 import type { Application } from 'express';
 
 import Transaction from '@/models/Transaction';
-import { clearDatabase, startInMemoryMongo, stopInMemoryMongo } from './testUtils';
+import {
+  authHeaders,
+  clearDatabase,
+  createTestUser,
+  generateTestToken,
+  startInMemoryMongo,
+  stopInMemoryMongo,
+  TEST_USER_ID,
+} from './testUtils';
 
 let app: Application;
+let token: string;
 
 describe('transactions API', () => {
   beforeAll(async () => {
@@ -16,6 +25,8 @@ describe('transactions API', () => {
 
   beforeEach(async () => {
     await clearDatabase();
+    await createTestUser();
+    token = generateTestToken();
   });
 
   afterAll(async () => {
@@ -30,9 +41,12 @@ describe('transactions API', () => {
       category: 'Food & Drinks',
       mode: 'Cash',
       notes: '',
+      userId: TEST_USER_ID,
     });
 
-    const res = await request(app).get('/api/transactions');
+    const res = await request(app)
+      .get('/api/transactions')
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
     expect(res.body.error).toBeNull();
     expect(res.body.data.total).toBe(1);
@@ -47,6 +61,7 @@ describe('transactions API', () => {
       category: 'Food & Drinks',
       mode: 'Cash',
       notes: 'nice',
+      userId: TEST_USER_ID,
     });
     await Transaction.create({
       date: new Date('2026-03-01'),
@@ -55,9 +70,13 @@ describe('transactions API', () => {
       category: 'Bus/GSRTC',
       mode: 'Online',
       notes: '',
+      userId: TEST_USER_ID,
     });
 
-    const res = await request(app).get('/api/transactions').query({ search: 'cof' });
+    const res = await request(app)
+      .get('/api/transactions')
+      .query({ search: 'cof' })
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
     expect(res.body.data.total).toBe(1);
     expect(res.body.data.transactions[0].particulars).toBe('Coffee');
@@ -71,6 +90,7 @@ describe('transactions API', () => {
       category: 'Food & Drinks',
       mode: 'Cash',
       notes: '',
+      userId: TEST_USER_ID,
     });
     await Transaction.create({
       date: new Date('2026-03-01'),
@@ -79,25 +99,30 @@ describe('transactions API', () => {
       category: 'Bus/GSRTC',
       mode: 'Online',
       notes: '',
+      userId: TEST_USER_ID,
     });
 
     const res = await request(app)
       .get('/api/transactions')
-      .query({ category: 'Bus/GSRTC' });
+      .query({ category: 'Bus/GSRTC' })
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
     expect(res.body.data.total).toBe(1);
     expect(res.body.data.transactions[0].category).toBe('Bus/GSRTC');
   });
 
   it('creates valid transaction', async () => {
-    const res = await request(app).post('/api/transactions').send({
-      date: '2026-03-01',
-      particulars: 'Snack',
-      amount: 10,
-      category: 'Food & Drinks',
-      mode: 'Online',
-      notes: 'tasty',
-    });
+    const res = await request(app)
+      .post('/api/transactions')
+      .set(authHeaders(token))
+      .send({
+        date: '2026-03-01',
+        particulars: 'Snack',
+        amount: 10,
+        category: 'Food & Drinks',
+        mode: 'Online',
+        notes: 'tasty',
+      });
 
     expect(res.status).toBe(201);
     expect(res.body.error).toBeNull();
@@ -105,9 +130,12 @@ describe('transactions API', () => {
   });
 
   it('creates invalid transaction (missing fields)', async () => {
-    const res = await request(app).post('/api/transactions').send({
-      particulars: 'Snack',
-    });
+    const res = await request(app)
+      .post('/api/transactions')
+      .set(authHeaders(token))
+      .send({
+        particulars: 'Snack',
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.data).toBeNull();
@@ -122,6 +150,7 @@ describe('transactions API', () => {
 
     const res = await request(app)
       .post('/api/transactions/import/csv')
+      .set(authHeaders(token))
       .attach('file', Buffer.from(csv), 'transactions.csv');
 
     expect(res.status).toBe(200);
@@ -141,15 +170,20 @@ describe('transactions API', () => {
       category: 'Food & Drinks',
       mode: 'Cash',
       notes: '',
+      userId: TEST_USER_ID,
     });
 
-    const res = await request(app).get(`/api/transactions/${created._id.toString()}`);
+    const res = await request(app)
+      .get(`/api/transactions/${created._id.toString()}`)
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
     expect(res.body.data.particulars).toBe('Coffee');
   });
 
   it('get non-existent id', async () => {
-    const res = await request(app).get('/api/transactions/507f1f77bcf86cd799439011');
+    const res = await request(app)
+      .get('/api/transactions/507f1f77bcf86cd799439012')
+      .set(authHeaders(token));
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('Transaction not found');
   });
@@ -162,10 +196,12 @@ describe('transactions API', () => {
       category: 'Food & Drinks',
       mode: 'Cash',
       notes: '',
+      userId: TEST_USER_ID,
     });
 
     const res = await request(app)
       .put(`/api/transactions/${created._id.toString()}`)
+      .set(authHeaders(token))
       .send({ amount: 30 });
 
     expect(res.status).toBe(200);
@@ -180,15 +216,20 @@ describe('transactions API', () => {
       category: 'Food & Drinks',
       mode: 'Cash',
       notes: '',
+      userId: TEST_USER_ID,
     });
 
-    const res = await request(app).delete(`/api/transactions/${created._id.toString()}`);
+    const res = await request(app)
+      .delete(`/api/transactions/${created._id.toString()}`)
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
     expect(res.body.message).toBe('Transaction deleted');
   });
 
   it('delete non-existent', async () => {
-    const res = await request(app).delete('/api/transactions/507f1f77bcf86cd799439011');
+    const res = await request(app)
+      .delete('/api/transactions/507f1f77bcf86cd799439012')
+      .set(authHeaders(token));
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('Transaction not found');
   });

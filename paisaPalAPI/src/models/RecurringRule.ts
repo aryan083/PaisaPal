@@ -4,6 +4,7 @@ import { type Category, type Mode } from './Transaction';
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface IRecurringRule extends Document {
+  userId: mongoose.Types.ObjectId;
   name: string;
   particulars: string;
   amount: number;
@@ -24,6 +25,7 @@ export interface IRecurringRule extends Document {
 
 const recurringRuleSchema = new Schema<IRecurringRule>(
   {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     name: { type: String, required: true, maxlength: 100 },
     particulars: { type: String, required: true, maxlength: 200 },
     amount: { type: Number, required: true, min: 0 },
@@ -65,7 +67,7 @@ const recurringRuleSchema = new Schema<IRecurringRule>(
   { timestamps: true },
 );
 
-recurringRuleSchema.index({ nextDue: 1, isActive: 1 });
+recurringRuleSchema.index({ userId: 1, nextDue: 1, isActive: 1 });
 
 const RecurringRule: Model<IRecurringRule> =
   mongoose.models.RecurringRule ?? mongoose.model<IRecurringRule>('RecurringRule', recurringRuleSchema);

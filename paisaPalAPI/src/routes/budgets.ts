@@ -9,9 +9,12 @@ import {
 } from '../controllers/budgets';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validate } from '../middleware/validate';
+import { requireAuth } from '../middleware/auth';
 import { BudgetSchema, BudgetUpdateSchema } from '../schemas';
 
 const router = Router();
+
+router.use(requireAuth);
 
 router.get('/stats', asyncHandler(getBudgetStats));
 router.get('/', asyncHandler(listBudgets));

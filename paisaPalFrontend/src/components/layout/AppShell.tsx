@@ -15,7 +15,7 @@ export function AppShell({ children }: AppShellProps) {
         <Sidebar />
       </div>
 
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 lg:ml-60">
         {/* Mobile Header */}
         <div className="lg:hidden">
           <Header />

@@ -8,14 +8,27 @@ function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_URL ?? '/api';
 }
 
+function getAuthToken(): string | null {
+  try {
+    const stored = localStorage.getItem('auth-storage')
+    if (!stored) return null
+    const parsed = JSON.parse(stored)
+    return parsed?.state?.token ?? null
+  } catch {
+    return null
+  }
+}
+
 async function requestJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<ApiResponse<T>> {
+  const token = getAuthToken()
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -173,8 +186,26 @@ export async function importTransactionsCsv(
   if (options?.skipDuplicates) params.set('skipDuplicates', 'true');
   const query = params.toString();
 
+  // Get auth token from localStorage
+  const authStorage = localStorage.getItem('auth-storage');
+  let token: string | undefined;
+  if (authStorage) {
+    try {
+      const parsed = JSON.parse(authStorage);
+      token = parsed.state?.token;
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${getApiBaseUrl()}/transactions/import/csv${query ? `?${query}` : ''}`, {
     method: 'POST',
+    headers,
     body: formData,
   });
 
@@ -404,6 +435,33 @@ export async function fetchBudgetStats(month: string): Promise<BudgetStatsData> 
   const res = await requestJson<BudgetStatsData>(`/budgets/stats?month=${month}`);
   if (!res.data || res.error) {
     throw new Error(res.error ?? 'Failed to fetch budget stats');
+  }
+  return res.data;
+}
+
+// Audit Log API
+export type ApiAuditLog = {
+  _id: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  resource: 'transaction' | 'settings' | 'budget' | 'recurring';
+  resourceId: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  metadata: {
+    ip?: string;
+    userAgent?: string;
+  };
+  createdAt: string;
+};
+
+export async function fetchAuditLogs(limit?: number, resource?: string): Promise<ApiAuditLog[]> {
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  if (resource) params.set('resource', resource);
+  const query = params.toString();
+  const res = await requestJson<ApiAuditLog[]>(`/audit${query ? `?${query}` : ''}`);
+  if (!res.data || res.error) {
+    throw new Error(res.error ?? 'Failed to fetch audit logs');
   }
   return res.data;
 }

@@ -44,7 +44,10 @@ export function calculateNextDueDate(rule: IRecurringRule, fromDate: Date = new 
   return next;
 }
 
-export async function materializeRecurringTransactions(dryRun: boolean = false): Promise<{
+export async function materializeRecurringTransactions(
+  dryRun: boolean = false,
+  userId?: string,
+): Promise<{
   created: number;
   skipped: number;
   transactions: Array<{
@@ -61,14 +64,20 @@ export async function materializeRecurringTransactions(dryRun: boolean = false):
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const rules = await RecurringRule.find({
+  const filter: Record<string, unknown> = {
     isActive: true,
     nextDue: { $lte: today },
     $or: [
       { endDate: { $exists: false } },
       { endDate: { $gte: today } },
     ],
-  });
+  };
+
+  if (userId) {
+    filter.userId = userId;
+  }
+
+  const rules = await RecurringRule.find(filter);
 
   const result = {
     created: 0,
@@ -84,7 +93,7 @@ export async function materializeRecurringTransactions(dryRun: boolean = false):
   };
 
   for (const rule of rules) {
-    const transactionData = {
+    const transactionData: Record<string, unknown> = {
       date: rule.nextDue,
       particulars: rule.particulars,
       amount: rule.amount,
@@ -92,6 +101,10 @@ export async function materializeRecurringTransactions(dryRun: boolean = false):
       mode: rule.mode,
       notes: rule.notes || `Generated from recurring rule: ${rule.name}`,
     };
+
+    if (userId) {
+      transactionData.userId = userId;
+    }
 
     result.transactions.push({
       ruleId: rule._id.toString(),

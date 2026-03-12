@@ -14,6 +14,7 @@ export type Category =
 export type Mode = 'Online' | 'Cash';
 
 export interface ITransaction extends Document {
+  userId: mongoose.Types.ObjectId;
   date: Date;
   particulars: string;
   amount: number;
@@ -26,6 +27,7 @@ export interface ITransaction extends Document {
 
 const transactionSchema = new Schema<ITransaction>(
   {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     date: { type: Date, required: true, index: true },
     particulars: { type: String, required: true, maxlength: 200 },
     amount: { type: Number, required: true, min: 0 },
@@ -55,6 +57,9 @@ const transactionSchema = new Schema<ITransaction>(
   },
   { timestamps: true },
 );
+
+transactionSchema.index({ userId: 1, date: -1 });
+transactionSchema.index({ userId: 1, category: 1 });
 
 const Transaction: Model<ITransaction> =
   mongoose.models.Transaction ?? mongoose.model<ITransaction>('Transaction', transactionSchema);

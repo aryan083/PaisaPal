@@ -102,18 +102,24 @@ function validateRow(rowNumber: number, record: RawRecord) {
 
 async function checkDuplicates(
   transactions: Array<{ date: Date; particulars: string; amount: number }>,
+  userId?: string,
 ): Promise<Set<number>> {
   const duplicateIndices = new Set<number>();
 
   const checks = transactions.map(async (tx, index) => {
-    const existing = await Transaction.findOne({
+    const filter: Record<string, unknown> = {
       date: {
         $gte: new Date(tx.date.setHours(0, 0, 0, 0)),
         $lt: new Date(tx.date.setHours(23, 59, 59, 999)),
       },
       particulars: tx.particulars,
       amount: tx.amount,
-    }).lean();
+    };
+    if (userId) {
+      filter.userId = userId;
+    }
+
+    const existing = await Transaction.findOne(filter).lean();
 
     if (existing) {
       duplicateIndices.add(index);
@@ -134,9 +140,9 @@ async function insertTransactions(transactions: unknown[]) {
 
 export async function importTransactionsFromCsv(
   csvBuffer: Buffer,
-  options: { dryRun?: boolean; skipDuplicates?: boolean } = {},
+  options: { dryRun?: boolean; skipDuplicates?: boolean; userId?: string } = {},
 ): Promise<ImportCsvResult> {
-  const { dryRun = false, skipDuplicates = false } = options;
+  const { dryRun = false, skipDuplicates = false, userId } = options;
 
   const records = parseCsv(csvBuffer);
   const errors: ImportError[] = [];
@@ -166,7 +172,7 @@ export async function importTransactionsFromCsv(
   let duplicates = 0;
 
   // Check for duplicates
-  const duplicateIndices = await checkDuplicates(valid.map((v) => v.data));
+  const duplicateIndices = await checkDuplicates(valid.map((v) => v.data), userId);
 
   const preview = valid.map((v, index) => ({
     row: v.row,
@@ -194,7 +200,11 @@ export async function importTransactionsFromCsv(
   }
 
   if (!dryRun && toInsert.length > 0) {
-    await insertTransactions(toInsert.map((v) => v.data));
+    const insertData = toInsert.map((v) => ({
+      ...v.data,
+      ...(userId ? { userId } : {}),
+    }));
+    await insertTransactions(insertData);
   }
 
   return {

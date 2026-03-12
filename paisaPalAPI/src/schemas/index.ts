@@ -1,5 +1,35 @@
 import { z } from 'zod';
 
+// Custom date parser for DD-MM-YYYY format
+const parseDDMMYYYY = (val: string | Date): Date => {
+  if (val instanceof Date) return val;
+  
+  // Try DD-MM-YYYY format first
+  const ddmmyyyy = val.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  // Fallback to ISO format YYYY-MM-DD
+  const isoMatch = val.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  // Final fallback - let Date parse
+  const parsed = new Date(val);
+  if (isNaN(parsed.getTime())) {
+    throw new Error('Invalid date format. Use DD-MM-YYYY or YYYY-MM-DD');
+  }
+  return parsed;
+};
+
+const DDMMYYYYDateSchema = z.string().or(z.date()).transform((val) => parseDDMMYYYY(val));
+
 export const CategorySchema = z.enum([
   'Rapido',
   'Bus/GSRTC',
@@ -19,7 +49,7 @@ export const ModeSchema = z.enum(['Online', 'Cash']);
 export const FrequencySchema = z.enum(['daily', 'weekly', 'monthly', 'yearly']);
 
 export const TransactionSchema = z.object({
-  date: z.coerce.date(),
+  date: DDMMYYYYDateSchema,
   particulars: z.string().min(1).max(200),
   amount: z.number().min(0),
   category: CategorySchema,
@@ -77,8 +107,8 @@ export const RecurringRuleSchema = z.object({
   frequency: FrequencySchema,
   dayOfMonth: z.number().int().min(1).max(31).optional(),
   dayOfWeek: z.number().int().min(0).max(6).optional(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date().optional(),
+  startDate: DDMMYYYYDateSchema,
+  endDate: DDMMYYYYDateSchema.optional(),
   isActive: z.boolean().default(true),
 });
 

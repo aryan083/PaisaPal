@@ -1,10 +1,25 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
-import { Upload, Eye, Copy } from 'lucide-react'
+import { Upload, Eye, Copy, Check, X, Edit2, Trash2 } from 'lucide-react'
 import { importTransactionsCsv, type ImportResult } from '@/lib/api'
+import { CATEGORIES, type Category } from '@/types'
 
 const EXPECTED_HEADERS = ['Date', 'Particulars', 'Amount paid', 'Total expenses', 'Mode of payment', 'Notes', 'Category']
+
+interface PreviewRow {
+  row: number
+  date: string
+  particulars: string
+  amount: number
+  category: Category
+  mode: 'Online' | 'Cash'
+  notes: string
+  isDuplicate: boolean
+  isSelected: boolean
+  isEditing: boolean
+  error?: string
+}
 
 interface BulkImportProps {
   open: boolean
@@ -13,10 +28,10 @@ interface BulkImportProps {
 
 export function BulkImport({ open, onClose }: BulkImportProps) {
   const [file, setFile] = useState<File | null>(null)
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const [skipDuplicates, setSkipDuplicates] = useState(true)
-  const [step, setStep] = useState<'input' | 'result'>('input')
+  const [step, setStep] = useState<'input' | 'preview' | 'result'>('input')
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -33,12 +48,50 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     try {
       setLoading(true)
       const result = await importTransactionsCsv(file, { dryRun: true })
-      setImportResult(result)
-      setStep('result')
-      if (result.duplicates > 0) {
-        toast.info(`Found ${result.duplicates} potential duplicates`)
+      
+      // Transform preview data into editable rows
+      const rows: PreviewRow[] = (result.preview || []).map((p, idx) => ({
+        row: p.row,
+        date: formatDateForDisplay(p.data.date),
+        particulars: p.data.particulars,
+        amount: p.data.amount,
+        category: p.data.category as Category,
+        mode: p.data.mode as 'Online' | 'Cash',
+        notes: p.data.notes,
+        isDuplicate: p.isDuplicate,
+        isSelected: !p.isDuplicate,
+        isEditing: false,
+      }))
+      
+      // Add error rows
+      for (const err of result.errors) {
+        rows.push({
+          row: err.row,
+          date: '',
+          particulars: '',
+          amount: 0,
+          category: 'Other',
+          mode: 'Online',
+          notes: '',
+          isDuplicate: false,
+          isSelected: false,
+          isEditing: true,
+          error: err.error,
+        })
+      }
+      
+      // Sort by row number
+      rows.sort((a, b) => a.row - b.row)
+      
+      setPreviewRows(rows)
+      setStep('preview')
+      
+      if (result.errors.length > 0) {
+        toast.warning(`${result.errors.length} rows have errors - please fix them`)
+      } else if (result.duplicates > 0) {
+        toast.info(`Found ${result.duplicates} potential duplicates - review and select what to import`)
       } else {
-        toast.success(`Ready to import ${result.inserted} transactions`)
+        toast.success(`Ready to import ${rows.length} transactions`)
       }
     } catch (err) {
       toast.error('Failed to preview import')
@@ -48,20 +101,72 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     }
   }
 
+  const formatDateForDisplay = (date: Date | string): string => {
+    const d = date instanceof Date ? date : new Date(date)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}-${month}-${year}`
+  }
+
+  const toggleRowSelection = (rowNum: number) => {
+    setPreviewRows(rows => 
+      rows.map(r => r.row === rowNum ? { ...r, isSelected: !r.isSelected } : r)
+    )
+  }
+
+  const toggleRowEditing = (rowNum: number) => {
+    setPreviewRows(rows => 
+      rows.map(r => r.row === rowNum ? { ...r, isEditing: !r.isEditing } : r)
+    )
+  }
+
+  const deleteRow = (rowNum: number) => {
+    setPreviewRows(rows => rows.filter(r => r.row !== rowNum))
+  }
+
+  const updateRow = (rowNum: number, field: keyof PreviewRow, value: string | number) => {
+    setPreviewRows(rows => 
+      rows.map(r => {
+        if (r.row !== rowNum) return r
+        const updated = { ...r, [field]: value }
+        // Clear error when user edits
+        if (r.error) {
+          updated.error = undefined
+          updated.isSelected = true
+        }
+        return updated
+      })
+    )
+  }
+
+  const selectAll = () => {
+    setPreviewRows(rows => rows.map(r => ({ ...r, isSelected: !r.error && !r.isDuplicate })))
+  }
+
+  const deselectAll = () => {
+    setPreviewRows(rows => rows.map(r => ({ ...r, isSelected: false })))
+  }
+
   const handleImport = async () => {
-    if (!file) {
-      toast.error('Please select a file first')
+    const selectedRows = previewRows.filter(r => r.isSelected && !r.error)
+    if (selectedRows.length === 0) {
+      toast.error('No valid rows selected for import')
       return
     }
+
     try {
       setLoading(true)
-      const result = await importTransactionsCsv(file, { skipDuplicates })
+      
+      // Build CSV from selected rows
+      const csvContent = buildCsvFromRows(selectedRows)
+      const csvBlob = new Blob([csvContent], { type: 'text/csv' })
+      const csvFile = new File([csvBlob], 'import.csv', { type: 'text/csv' })
+      
+      const result = await importTransactionsCsv(csvFile, { skipDuplicates: false })
       setImportResult(result)
       setStep('result')
       toast.success(`Imported ${result.inserted} transactions`)
-      if (result.duplicates > 0) {
-        toast.info(`Skipped ${result.duplicates} duplicates`)
-      }
     } catch (err) {
       toast.error('Failed to import transactions')
       console.error(err)
@@ -70,16 +175,35 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     }
   }
 
+  const buildCsvFromRows = (rows: PreviewRow[]): string => {
+    const header = 'date,particulars,amount,category,mode,notes\n'
+    const csvRows = rows.map(r => {
+      const date = r.date // DD-MM-YYYY format
+      const particulars = `"${r.particulars.replace(/"/g, '""')}"`
+      const amount = r.amount
+      const category = r.category
+      const mode = r.mode
+      const notes = `"${r.notes.replace(/"/g, '""')}"`
+      return `${date},${particulars},${amount},${category},${mode},${notes}`
+    })
+    return header + csvRows.join('\n')
+  }
+
   const handleClose = () => {
     setFile(null)
+    setPreviewRows([])
     setImportResult(null)
     setStep('input')
     onClose()
   }
 
+  const selectedCount = previewRows.filter(r => r.isSelected && !r.error).length
+  const errorCount = previewRows.filter(r => r.error).length
+  const duplicateCount = previewRows.filter(r => r.isDuplicate).length
+
   return (
     <Sheet open={open} onOpenChange={o => { if (!o) handleClose() }}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl bg-card border-border overflow-y-auto">
+      <SheetContent side="right" className="w-full sm:max-w-3xl bg-card border-border overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-display text-foreground flex items-center gap-2">
             <Upload className="h-5 w-5" /> Bulk Import
@@ -98,7 +222,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mb-2">
-                <strong>Date</strong>, <strong>Particulars</strong>, and <strong>Amount</strong> are required. Missing categories default to "Other".
+                <strong>Date</strong> (DD-MM-YYYY), <strong>Particulars</strong>, and <strong>Amount</strong> are required. Missing categories default to "Other".
               </p>
             </div>
 
@@ -122,34 +246,193 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
               </label>
             </div>
 
-            {/* Options */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="skipDuplicates"
-                checked={skipDuplicates}
-                onChange={e => setSkipDuplicates(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              <label htmlFor="skipDuplicates" className="text-sm text-muted-foreground">
-                Skip duplicates (recommended)
-              </label>
-            </div>
-
             <div className="flex gap-2">
               <button
                 onClick={handleDryRun}
                 disabled={loading || !file}
                 className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-secondary py-2.5 text-sm font-medium text-foreground disabled:opacity-50"
               >
-                <Eye className="h-4 w-4" /> Preview
+                <Eye className="h-4 w-4" /> Preview & Edit
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'preview' && (
+          <div className="mt-6 space-y-4">
+            {/* Summary */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-2">
+                <button onClick={selectAll} className="text-xs text-primary hover:underline">
+                  Select All Valid
+                </button>
+                <span className="text-muted-foreground">|</span>
+                <button onClick={deselectAll} className="text-xs text-muted-foreground hover:underline">
+                  Deselect All
+                </button>
+              </div>
+              <div className="text-sm">
+                <span className="text-[hsl(var(--success))]">{selectedCount}</span>
+                <span className="text-muted-foreground"> selected to import</span>
+                {errorCount > 0 && (
+                  <span className="ml-2 text-[hsl(var(--danger))]">({errorCount} errors)</span>
+                )}
+                {duplicateCount > 0 && (
+                  <span className="ml-2 text-[hsl(var(--warning))]">({duplicateCount} duplicates)</span>
+                )}
+              </div>
+            </div>
+
+            {/* Preview Table */}
+            <div className="border border-border rounded-xl overflow-hidden">
+              <div className="max-h-[60vh] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary sticky top-0">
+                    <tr>
+                      <th className="px-2 py-2 text-left w-8"></th>
+                      <th className="px-2 py-2 text-left">Row</th>
+                      <th className="px-2 py-2 text-left">Date</th>
+                      <th className="px-2 py-2 text-left">Particulars</th>
+                      <th className="px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-left">Category</th>
+                      <th className="px-2 py-2 text-left">Mode</th>
+                      <th className="px-2 py-2 text-left">Notes</th>
+                      <th className="px-2 py-2 text-center w-20">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map(row => (
+                      <tr 
+                        key={row.row} 
+                        className={`border-t border-border ${
+                          row.error ? 'bg-[hsl(var(--danger)/0.1)]' : 
+                          row.isDuplicate ? 'bg-[hsl(var(--warning)/0.1)]' : 
+                          row.isSelected ? 'bg-[hsl(var(--success)/0.05)]' : ''
+                        }`}
+                      >
+                        <td className="px-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={row.isSelected}
+                            disabled={!!row.error}
+                            onChange={() => toggleRowSelection(row.row)}
+                            className="h-4 w-4 rounded"
+                          />
+                        </td>
+                        <td className="px-2 py-1 text-muted-foreground text-xs">{row.row}</td>
+                        
+                        {row.isEditing ? (
+                          <>
+                            <td className="px-1 py-1">
+                              <input
+                                type="text"
+                                value={row.date}
+                                onChange={e => updateRow(row.row, 'date', e.target.value)}
+                                className="w-20 px-1 py-0.5 text-xs rounded border border-border bg-background"
+                                placeholder="DD-MM-YYYY"
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="text"
+                                value={row.particulars}
+                                onChange={e => updateRow(row.row, 'particulars', e.target.value)}
+                                className="w-32 px-1 py-0.5 text-xs rounded border border-border bg-background"
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="number"
+                                value={row.amount}
+                                onChange={e => updateRow(row.row, 'amount', Number(e.target.value))}
+                                className="w-16 px-1 py-0.5 text-xs rounded border border-border bg-background text-right"
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <select
+                                value={row.category}
+                                onChange={e => updateRow(row.row, 'category', e.target.value)}
+                                className="px-1 py-0.5 text-xs rounded border border-border bg-background"
+                              >
+                                {CATEGORIES.map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-1 py-1">
+                              <select
+                                value={row.mode}
+                                onChange={e => updateRow(row.row, 'mode', e.target.value)}
+                                className="px-1 py-0.5 text-xs rounded border border-border bg-background"
+                              >
+                                <option value="Online">Online</option>
+                                <option value="Cash">Cash</option>
+                              </select>
+                            </td>
+                            <td className="px-1 py-1">
+                              <input
+                                type="text"
+                                value={row.notes}
+                                onChange={e => updateRow(row.row, 'notes', e.target.value)}
+                                className="w-20 px-1 py-0.5 text-xs rounded border border-border bg-background"
+                              />
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-2 py-1 text-xs">{row.date}</td>
+                            <td className="px-2 py-1 text-xs truncate max-w-[150px]">{row.particulars}</td>
+                            <td className="px-2 py-1 text-xs text-right">₹{row.amount}</td>
+                            <td className="px-2 py-1 text-xs">{row.category}</td>
+                            <td className="px-2 py-1 text-xs">{row.mode}</td>
+                            <td className="px-2 py-1 text-xs truncate max-w-[100px]">{row.notes}</td>
+                          </>
+                        )}
+                        
+                        <td className="px-2 py-1">
+                          <div className="flex items-center justify-center gap-1">
+                            {row.error && (
+                              <span className="text-xs text-[hsl(var(--danger))] whitespace-nowrap">{row.error}</span>
+                            )}
+                            {row.isDuplicate && !row.error && (
+                              <Copy className="h-3 w-3 text-[hsl(var(--warning))]" title="Duplicate" />
+                            )}
+                            <button
+                              onClick={() => toggleRowEditing(row.row)}
+                              className="p-1 hover:bg-secondary rounded"
+                              title={row.isEditing ? 'Save' : 'Edit'}
+                            >
+                              {row.isEditing ? <Check className="h-3 w-3 text-[hsl(var(--success))]" /> : <Edit2 className="h-3 w-3 text-muted-foreground" />}
+                            </button>
+                            <button
+                              onClick={() => deleteRow(row.row)}
+                              className="p-1 hover:bg-secondary rounded"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3 w-3 text-[hsl(var(--danger))]" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setStep('input')}
+                className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-medium text-foreground"
+              >
+                Back
               </button>
               <button
                 onClick={handleImport}
-                disabled={loading || !file}
+                disabled={loading || selectedCount === 0}
                 className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
               >
-                {loading ? 'Importing...' : 'Import'}
+                {loading ? 'Importing...' : `Import ${selectedCount} Transactions`}
               </button>
             </div>
           </div>

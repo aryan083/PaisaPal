@@ -3,9 +3,18 @@ import request from 'supertest';
 import type { Application } from 'express';
 
 import Settings from '@/models/Settings';
-import { clearDatabase, startInMemoryMongo, stopInMemoryMongo } from './testUtils';
+import {
+  authHeaders,
+  clearDatabase,
+  createTestUser,
+  generateTestToken,
+  startInMemoryMongo,
+  stopInMemoryMongo,
+  TEST_USER_ID,
+} from './testUtils';
 
 let app: Application;
+let token: string;
 
 describe('settings API', () => {
   beforeAll(async () => {
@@ -16,6 +25,8 @@ describe('settings API', () => {
 
   beforeEach(async () => {
     await clearDatabase();
+    await createTestUser();
+    token = generateTestToken();
   });
 
   afterAll(async () => {
@@ -23,30 +34,40 @@ describe('settings API', () => {
   });
 
   it('get creates default if none', async () => {
-    const res = await request(app).get('/api/settings');
+    const res = await request(app)
+      .get('/api/settings')
+      .set(authHeaders(token));
     expect(res.status).toBe(200);
     expect(res.body.error).toBeNull();
-    expect(res.body.data._id).toBe('default');
     expect(res.body.data.stipend).toBe(12000);
     expect(res.body.data.extra).toBe(0);
   });
 
   it('update stipend', async () => {
-    await Settings.create({ _id: 'default', stipend: 12000, extra: 0 });
+    await Settings.create({ stipend: 12000, extra: 0, userId: TEST_USER_ID });
 
-    const res = await request(app).put('/api/settings').send({ stipend: 15000 });
+    const res = await request(app)
+      .put('/api/settings')
+      .set(authHeaders(token))
+      .send({ stipend: 15000 });
     expect(res.status).toBe(200);
     expect(res.body.data.stipend).toBe(15000);
   });
 
   it('update extra', async () => {
-    const res = await request(app).put('/api/settings').send({ extra: 500 });
+    const res = await request(app)
+      .put('/api/settings')
+      .set(authHeaders(token))
+      .send({ extra: 500 });
     expect(res.status).toBe(200);
     expect(res.body.data.extra).toBe(500);
   });
 
   it('update both', async () => {
-    const res = await request(app).put('/api/settings').send({ stipend: 13000, extra: 100 });
+    const res = await request(app)
+      .put('/api/settings')
+      .set(authHeaders(token))
+      .send({ stipend: 13000, extra: 100 });
     expect(res.status).toBe(200);
     expect(res.body.data.stipend).toBe(13000);
     expect(res.body.data.extra).toBe(100);
