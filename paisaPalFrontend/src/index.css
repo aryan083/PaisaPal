@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=cabinet-grotesk@400,500,700,800&display=swap');
+
+@layer base {
+  :root {
+    --font-display: "Clash Display", sans-serif;
+    --font-body: "Cabinet Grotesk", sans-serif;
+
+    /* Dark theme (default) — Teal/Emerald accent */
+    --background: 220 25% 6%;
+    --foreground: 220 20% 96%;
+
+    --card: 220 22% 9%;
+    --card-foreground: 220 20% 96%;
+    --card-hover: 220 22% 12%;
+
+    --popover: 220 22% 9%;
+    --popover-foreground: 220 20% 96%;
+
+    --primary: 168 80% 48%;
+    --primary-foreground: 220 25% 6%;
+
+    --secondary: 220 22% 13%;
+    --secondary-foreground: 220 20% 96%;
+
+    --muted: 220 18% 16%;
+    --muted-foreground: 220 12% 52%;
+
+    --accent: 168 80% 48%;
+    --accent-foreground: 220 25% 6%;
+    --accent-soft: 168 80% 48%;
+
+    --destructive: 350 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 18% 15%;
+    --border-subtle: 220 18% 11%;
+    --input: 220 18% 15%;
+    --ring: 168 80% 48%;
+
+    --radius: 0.75rem;
+
+    /* Surface */
+    --surface: 220 22% 7%;
+
+    /* Category colors */
+    --color-rapido: 18 100% 60%;
+    --color-bus: 164 100% 42%;
+    --color-food: 350 100% 65%;
+    --color-shopping: 270 100% 70%;
+    --color-social: 38 100% 56%;
+    --color-recharge: 210 100% 65%;
+    --color-selfcare: 330 100% 75%;
+    --color-transfer: 345 100% 69%;
+    --color-other: 210 25% 50%;
+
+    /* Status */
+    --success: 152 73% 50%;
+    --success-soft: 152 73% 50%;
+    --warning: 38 100% 56%;
+    --warning-soft: 38 100% 56%;
+    --danger: 350 100% 65%;
+    --danger-soft: 350 100% 65%;
+
+    /* Sidebar */
+    --sidebar-background: 220 22% 7%;
+    --sidebar-foreground: 220 12% 52%;
+    --sidebar-primary: 168 80% 48%;
+    --sidebar-primary-foreground: 220 25% 6%;
+    --sidebar-accent: 220 22% 13%;
+    --sidebar-accent-foreground: 220 20% 96%;
+    --sidebar-border: 220 18% 15%;
+    --sidebar-ring: 168 80% 48%;
+  }
+
+  [data-theme="light"] {
+    --background: 45 25% 97%;
+    --foreground: 220 30% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 10%;
+    --card-hover: 45 20% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 10%;
+
+    --primary: 168 80% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 45 18% 93%;
+    --secondary-foreground: 220 30% 10%;
+
+    --muted: 45 18% 93%;
+    --muted-foreground: 220 12% 42%;
+
+    --accent: 168 80% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 350 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 45 18% 86%;
+    --border-subtle: 45 18% 90%;
+    --input: 45 18% 86%;
+    --ring: 168 80% 38%;
+
+    --surface: 45 18% 93%;
+
+    --sidebar-background: 45 18% 93%;
+    --sidebar-foreground: 220 12% 42%;
+    --sidebar-primary: 168 80% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 45 18% 86%;
+    --sidebar-accent-foreground: 220 30% 10%;
+    --sidebar-border: 45 18% 86%;
+    --sidebar-ring: 168 80% 38%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-card/80 backdrop-blur-xl border-b border-border;
+  }
+
+  .card-base {
+    @apply rounded-2xl bg-card border border-border transition-colors;
+  }
+
+  .card-interactive {
+    @apply card-base hover:bg-[hsl(var(--card-hover))];
+  }
+
+  .text-display {
+    font-family: var(--font-display);
+  }
+
+  .text-body {
+    font-family: var(--font-body);
+  }
+
+  .category-rapido { color: hsl(var(--color-rapido)); }
+  .category-bus { color: hsl(var(--color-bus)); }
+  .category-food { color: hsl(var(--color-food)); }
+  .category-shopping { color: hsl(var(--color-shopping)); }
+  .category-social { color: hsl(var(--color-social)); }
+  .category-recharge { color: hsl(var(--color-recharge)); }
+  .category-selfcare { color: hsl(var(--color-selfcare)); }
+  .category-transfer { color: hsl(var(--color-transfer)); }
+  .category-other { color: hsl(var(--color-other)); }
+
+  .bg-category-rapido { background-color: hsl(var(--color-rapido)); }
+  .bg-category-bus { background-color: hsl(var(--color-bus)); }
+  .bg-category-food { background-color: hsl(var(--color-food)); }
+  .bg-category-shopping { background-color: hsl(var(--color-shopping)); }
+  .bg-category-social { background-color: hsl(var(--color-social)); }
+  .bg-category-recharge { background-color: hsl(var(--color-recharge)); }
+  .bg-category-selfcare { background-color: hsl(var(--color-selfcare)); }
+  .bg-category-transfer { background-color: hsl(var(--color-transfer)); }
+  .bg-category-other { background-color: hsl(var(--color-other)); }
+
+  .bg-category-rapido-soft { background-color: hsl(var(--color-rapido) / 0.12); }
+  .bg-category-bus-soft { background-color: hsl(var(--color-bus) / 0.12); }
+  .bg-category-food-soft { background-color: hsl(var(--color-food) / 0.12); }
+  .bg-category-shopping-soft { background-color: hsl(var(--color-shopping) / 0.12); }
+  .bg-category-social-soft { background-color: hsl(var(--color-social) / 0.12); }
+  .bg-category-recharge-soft { background-color: hsl(var(--color-recharge) / 0.12); }
+  .bg-category-selfcare-soft { background-color: hsl(var(--color-selfcare) / 0.12); }
+  .bg-category-transfer-soft { background-color: hsl(var(--color-transfer) / 0.12); }
+  .bg-category-other-soft { background-color: hsl(var(--color-other) / 0.12); }
+}
