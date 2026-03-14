@@ -269,6 +269,7 @@ export function RecurringPage() {
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         onPreview={handlePreview}
+        categories={categories}
       />
 
       {/* Preview Modal */}
@@ -304,9 +305,10 @@ interface RuleFormSheetProps {
   onCreate: (input: RecurringRuleInput) => void
   onUpdate: (id: string, input: Partial<RecurringRuleInput>) => void
   onPreview: (input: RecurringRuleInput) => void
+  categories: string[]
 }
 
-function RuleFormSheet({ open, onClose, rule, onCreate, onUpdate, onPreview }: RuleFormSheetProps) {
+function RuleFormSheet({ open, onClose, rule, onCreate, onUpdate, onPreview, categories }: RuleFormSheetProps) {
   const [name, setName] = useState('')
   const [particulars, setParticulars] = useState('')
   const [amount, setAmount] = useState('')

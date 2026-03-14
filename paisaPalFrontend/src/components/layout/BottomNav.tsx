@@ -18,18 +18,6 @@ export function BottomNav() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40">
-      {/* FAB */}
-      <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-50">
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          onClick={() => openForm()}
-          aria-label="Add transaction"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/30"
-        >
-          <Plus className="h-6 w-6 text-primary-foreground" />
-        </motion.button>
-      </div>
-
       <nav className="flex items-center justify-around border-t border-border bg-card px-2 pb-[env(safe-area-inset-bottom)] pt-2">
         {TABS.map(tab => (
           <button
