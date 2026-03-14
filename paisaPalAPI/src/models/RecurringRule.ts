@@ -37,7 +37,7 @@ const recurringRuleSchema = new Schema<IRecurringRule>(
     mode: {
       type: String,
       required: true,
-      enum: ['Online', 'Cash'],
+      enum: ['Online', 'Cash', 'Card'],
       default: 'Online',
     },
     notes: { type: String, default: '', maxlength: 500 },

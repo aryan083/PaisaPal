@@ -5,7 +5,7 @@ export const TransactionSchema = z.object({
   particulars: z.string().min(1, 'Description is required').max(200),
   amount: z.number({ invalid_type_error: 'Enter a valid amount' }).min(0, 'Amount must be positive'),
   category: z.string().min(1).max(50),
-  mode: z.enum(['Online', 'Cash']),
+  mode: z.enum(['Online', 'Cash', 'Card']),
   notes: z.string().max(500).optional().default(''),
 })
 

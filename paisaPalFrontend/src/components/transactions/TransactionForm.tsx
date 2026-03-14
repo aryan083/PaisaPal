@@ -57,6 +57,7 @@ export function TransactionForm() {
       } else {
         await addTransaction({
           date: data.date,
+          dateKey: data.date,
           particulars: data.particulars,
           amount: data.amount,
           category: data.category,
@@ -146,7 +147,7 @@ export function TransactionForm() {
               name="mode"
               render={({ field }) => (
                 <div className="flex gap-2">
-                  {(['Online', 'Cash'] as const).map(m => (
+                  {(['Online', 'Cash', 'Card'] as const).map(m => (
                     <button
                       key={m}
                       type="button"

@@ -13,7 +13,7 @@ export const DEFAULT_CATEGORIES = [
 export const CATEGORIES = DEFAULT_CATEGORIES
 
 export type Category = string
-export type PaymentMode = 'Online' | 'Cash'
+export type PaymentMode = 'Online' | 'Cash' | 'Card'
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
 export interface CategoryConfigEntry {
@@ -44,7 +44,7 @@ export interface Stats {
   totalSpent: number
   byCategory: { category: Category; total: number; count: number }[]
   byDate: { date: string; total: number }[]
-  byMode: { Online: number; Cash: number }
+  byMode: { Online: number; Cash: number; Card: number }
   transactionCount: number
   activeDays: number
   dailyAverage: number

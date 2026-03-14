@@ -60,10 +60,14 @@ export async function getStats(req: Request, res: Response) {
     { $group: { _id: '$mode', total: { $sum: '$amount' } } },
   ]);
 
-  const byMode: Record<'Online' | 'Cash', number> = { Online: 0, Cash: 0 };
+  const byMode: Record<'Online' | 'Cash' | 'Card', number> = {
+    Online: 0,
+    Cash: 0,
+    Card: 0,
+  };
   for (const item of byModeArr) {
     const mode = item._id;
-    if (mode === 'Online' || mode === 'Cash') {
+    if (mode === 'Online' || mode === 'Cash' || mode === 'Card') {
       byMode[mode] = item.total;
     }
   }

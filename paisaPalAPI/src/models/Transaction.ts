@@ -2,7 +2,7 @@ import mongoose, { type Document, type Model, Schema } from 'mongoose';
 
 export type Category = string;
 
-export type Mode = 'Online' | 'Cash';
+export type Mode = 'Online' | 'Cash' | 'Card';
 
 export interface ITransaction extends Document {
   userId: mongoose.Types.ObjectId;
@@ -41,7 +41,7 @@ const transactionSchema = new Schema<ITransaction>(
     mode: {
       type: String,
       required: true,
-      enum: ['Online', 'Cash'],
+      enum: ['Online', 'Cash', 'Card'],
       default: 'Online',
     },
     notes: { type: String, default: '', maxlength: 500 },

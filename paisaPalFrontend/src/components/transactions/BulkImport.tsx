@@ -17,7 +17,7 @@ interface PreviewRow {
   particulars: string
   amount: number
   category: Category
-  mode: 'Online' | 'Cash'
+  mode: 'Online' | 'Cash' | 'Card'
   notes: string
   isDuplicate: boolean
   isSelected: boolean
@@ -204,7 +204,8 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           const amount = Number(p.amount ?? 0)
           const category = String(p.category ?? 'Other')
           const modeRaw = String(p.mode ?? 'Online')
-          const mode: 'Online' | 'Cash' = modeRaw === 'Cash' ? 'Cash' : 'Online'
+          const mode: 'Online' | 'Cash' | 'Card' =
+            modeRaw === 'Cash' ? 'Cash' : modeRaw === 'Card' ? 'Card' : 'Online'
           const notes = String(p.notes ?? '')
 
           const err =
@@ -248,7 +249,8 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           const amount = Number(p.amount ?? 0)
           const category = String(p.category ?? 'Other')
           const modeRaw = String(p.mode ?? 'Online')
-          const mode: 'Online' | 'Cash' = modeRaw === 'Cash' ? 'Cash' : 'Online'
+          const mode: 'Online' | 'Cash' | 'Card' =
+            modeRaw === 'Cash' ? 'Cash' : modeRaw === 'Card' ? 'Card' : 'Online'
           const notes = String(p.notes ?? '')
 
           const err =
@@ -283,7 +285,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           particulars: p.data.particulars,
           amount: p.data.amount,
           category: p.data.category as Category,
-          mode: p.data.mode as 'Online' | 'Cash',
+          mode: p.data.mode as 'Online' | 'Cash' | 'Card',
           notes: p.data.notes,
           isDuplicate: p.isDuplicate,
           isSelected: !p.isDuplicate,
@@ -332,7 +334,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
         particulars: p.data.particulars,
         amount: p.data.amount,
         category: p.data.category as Category,
-        mode: p.data.mode as 'Online' | 'Cash',
+        mode: p.data.mode as 'Online' | 'Cash' | 'Card',
         notes: p.data.notes,
         isDuplicate: p.isDuplicate,
         isSelected: !p.isDuplicate,
@@ -440,6 +442,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
         await bulkAddTransactions(
           selectedRows.map((r) => ({
             date: r.date,
+            dateKey: r.date,
             particulars: r.particulars,
             amount: r.amount,
             category: r.category,

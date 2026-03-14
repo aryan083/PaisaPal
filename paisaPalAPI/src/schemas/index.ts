@@ -54,7 +54,7 @@ export const CategorySchema = z.string().min(1).max(50);
 
 export type Category = z.infer<typeof CategorySchema>;
 
-export const ModeSchema = z.enum(['Online', 'Cash']);
+export const ModeSchema = z.enum(['Online', 'Cash', 'Card']);
 
 export const FrequencySchema = z.enum(['daily', 'weekly', 'monthly', 'yearly']);
 

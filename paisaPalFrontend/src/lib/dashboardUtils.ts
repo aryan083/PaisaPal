@@ -52,7 +52,7 @@ export function computeFilteredStats(transactions: Transaction[]): Stats | null 
     .map(([date, total]) => ({ date, total }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  const byMode = { Online: 0, Cash: 0 }
+  const byMode = { Online: 0, Cash: 0, Card: 0 }
   transactions.forEach(t => { byMode[t.mode] += t.amount })
 
   const activeDays = dateMap.size

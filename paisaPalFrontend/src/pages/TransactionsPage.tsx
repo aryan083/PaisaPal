@@ -416,6 +416,7 @@ export function TransactionsPage() {
                     <option value="All">All</option>
                     <option value="Online">Online</option>
                     <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-2">

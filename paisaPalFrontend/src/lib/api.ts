@@ -67,7 +67,7 @@ export type ApiTransaction = {
   particulars: string;
   amount: number;
   category: string;
-  mode: 'Online' | 'Cash';
+  mode: 'Online' | 'Cash' | 'Card';
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -83,7 +83,7 @@ export type ListTransactionsData = {
 export type TransactionFilters = {
   search?: string;
   category?: string;
-  mode?: 'Online' | 'Cash';
+  mode?: 'Online' | 'Cash' | 'Card';
   startDate?: string;
   endDate?: string;
   minAmount?: number;
@@ -312,7 +312,7 @@ export type ApiRecurringRule = {
   particulars: string;
   amount: number;
   category: string;
-  mode: 'Online' | 'Cash';
+  mode: 'Online' | 'Cash' | 'Card';
   notes: string;
   frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
   dayOfMonth?: number;
@@ -331,7 +331,7 @@ export type RecurringRuleInput = {
   particulars: string;
   amount: number;
   category: string;
-  mode: 'Online' | 'Cash';
+  mode: 'Online' | 'Cash' | 'Card';
   notes?: string;
   frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
   dayOfMonth?: number;

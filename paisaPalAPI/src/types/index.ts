@@ -1,6 +1,6 @@
 export type Category = string;
 
-export type Mode = 'Online' | 'Cash';
+export type Mode = 'Online' | 'Cash' | 'Card';
 
 export interface ApiResponse<T> {
   data: T | null;
