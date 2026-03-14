@@ -227,8 +227,21 @@ export async function importTransactionsCsv(
     body: formData,
   });
 
-  const json = (await res.json()) as ApiResponse<ImportResult>;
+  console.log('CSV import response:', res.status, res.statusText);
+  
+  const text = await res.text();
+  console.log('CSV import response text:', text);
+  
+  let json: ApiResponse<ImportResult>;
+  try {
+    json = JSON.parse(text) as ApiResponse<ImportResult>;
+  } catch (e) {
+    console.error('Failed to parse CSV import response:', e);
+    throw new ApiError(`Invalid response: ${text.slice(0, 200)}`, res.status, { details: text });
+  }
+  
   if (!res.ok || json.error || !json.data) {
+    console.error('CSV import error response:', json);
     throw new ApiError(json.error ?? 'Failed to import transactions', res.status, json)
   }
   return json.data;
