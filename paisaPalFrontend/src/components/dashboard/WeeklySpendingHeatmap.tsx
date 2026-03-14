@@ -22,12 +22,12 @@ function getWeekOfMonth(dateStr: string): number {
 
 export function WeeklySpendingHeatmap({ transactions, dayFilter }: Props) {
   const dayIndexes = (() => {
-    if (dayFilter === 'weekday') return [1, 2, 3, 4, 5]
-    if (dayFilter === 'weekend') return [0, 6]
+    if (dayFilter === 'weekday') return [0, 1, 2, 3, 4] // Mon-Fri
+    if (dayFilter === 'weekend') return [5, 6] // Sat, Sun
     return [0, 1, 2, 3, 4, 5, 6]
   })()
 
-  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   const total = new Array(5)
     .fill(null)
@@ -41,7 +41,7 @@ export function WeeklySpendingHeatmap({ transactions, dayFilter }: Props) {
 
   transactions.forEach(t => {
     const w = getWeekOfMonth(t.date)
-    const dow = parseLocalDate(t.date).getDay()
+    const dow = (parseLocalDate(t.date).getDay() + 6) % 7 // Mon=0..Sun=6
     total[w - 1][dow] += t.amount
     count[w - 1][dow] += 1
     txns[w - 1][dow].push(t)

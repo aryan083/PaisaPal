@@ -55,10 +55,10 @@ export function SpendingCalendar({ transactions, selectedMonth }: Props) {
   const maxSpend = Math.max(...cells.map(c => c.total), 1)
 
   const [y, m] = selectedMonth.split('-').map(Number)
-  const firstDayOffset = new Date(y, m - 1, 1).getDay() // 0..6
+  const firstDayOffset = (new Date(y, m - 1, 1).getDay() + 6) % 7 // Mon=0..Sun=6
   const blanks = new Array(firstDayOffset).fill(null)
 
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   return (
     <div className="card-base p-5">
