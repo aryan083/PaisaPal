@@ -466,7 +466,7 @@ export async function fetchBudgetStats(month: string): Promise<BudgetStatsData> 
 export type ApiAuditLog = {
   _id: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  resource: 'transaction' | 'settings' | 'budget' | 'recurring';
+  resource: 'transaction' | 'settings' | 'budget' | 'recurring' | 'category';
   resourceId: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;

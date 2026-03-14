@@ -20,7 +20,7 @@ export function Header() {
         </div>
         <div className="flex items-center gap-2">
           {user && (
-            <div className="flex items-center gap-2 rounded-lg bg-secondary px-2 py-1 max-w-[160px]">
+            <div className="flex lg:hidden items-center gap-2 rounded-lg bg-secondary px-2 py-1 max-w-[160px]">
               <User className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-medium text-foreground max-w-[140px] truncate">
                 {user.name}

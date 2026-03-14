@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, Plus, Edit, Trash2, RefreshCw, Settings, Wallet, Receipt, X } from 'lucide-react'
+import { Activity, Plus, Edit, Trash2, RefreshCw, Settings, Wallet, Receipt, X, Tag } from 'lucide-react'
 import { fetchAuditLogs, type ApiAuditLog } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -20,6 +20,7 @@ const RESOURCE_ICONS = {
   settings: Settings,
   budget: Wallet,
   recurring: RefreshCw,
+  category: Tag,
 }
 
 const ACTION_COLORS = {
@@ -110,9 +111,9 @@ export function ActivityFeed({ isOpen, onClose }: ActivityFeedProps) {
               ) : (
                 <div className="divide-y divide-border">
                   {logs.map((log) => {
-                    const ActionIcon = ACTION_ICONS[log.action]
-                    const ResourceIcon = RESOURCE_ICONS[log.resource]
-                    const actionColor = ACTION_COLORS[log.action]
+                    const ActionIcon = ACTION_ICONS[log.action] ?? Activity
+                    const ResourceIcon = RESOURCE_ICONS[log.resource] ?? Activity
+                    const actionColor = ACTION_COLORS[log.action] ?? 'text-muted-foreground'
 
                     return (
                       <motion.div
@@ -128,7 +129,7 @@ export function ActivityFeed({ isOpen, onClose }: ActivityFeedProps) {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-foreground capitalize">
-                                {log.action.toLowerCase()}d
+                                {(log.action ? log.action.toLowerCase() : 'act') + 'd'}
                               </span>
                               <ResourceIcon className="w-4 h-4 text-muted-foreground" />
                               <span className="text-muted-foreground capitalize">
