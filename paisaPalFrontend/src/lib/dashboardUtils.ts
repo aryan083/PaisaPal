@@ -36,8 +36,9 @@ export function computeFilteredStats(transactions: Transaction[]): Stats | null 
 
   const catMap = new Map<Category, { total: number; count: number }>()
   transactions.forEach(t => {
-    const existing = catMap.get(t.category) || { total: 0, count: 0 }
-    catMap.set(t.category, { total: existing.total + t.amount, count: existing.count + 1 })
+    const category = (t.category || 'Other') as Category
+    const existing = catMap.get(category) || { total: 0, count: 0 }
+    catMap.set(category, { total: existing.total + t.amount, count: existing.count + 1 })
   })
   const byCategory = Array.from(catMap.entries())
     .map(([category, data]) => ({ category, ...data }))

@@ -6,6 +6,8 @@ import { DEFAULT_CATEGORIES, getAvailableCategories, getCategoryHex } from '@/ty
 import { encodeSnapshot, formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
+import { fetchAllTransactions } from '@/lib/api'
+import { useSyncStore } from '@/stores/syncStore'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,26 +57,48 @@ export function SettingsPage() {
     toast.success('CSV exported')
   }
 
-  const shareSnapshot = () => {
-    const data = { transactions, settings }
-    const encoded = encodeSnapshot(data)
-    const url = `${window.location.origin}${window.location.pathname}?snapshot=${encoded}`
-    Promise.resolve()
-      .then(() => navigator.clipboard.writeText(url))
-      .then(() => toast.success('Snapshot URL copied to clipboard'))
-      .catch(() => {
-        try {
-          const el = document.createElement('textarea')
-          el.value = url
-          document.body.appendChild(el)
-          el.select()
-          document.execCommand('copy')
-          document.body.removeChild(el)
-          toast.success('Snapshot URL copied to clipboard')
-        } catch {
-          toast.error('Failed to copy snapshot URL')
-        }
-      })
+  const shareSnapshot = async () => {
+    try {
+      const online = useSyncStore.getState().isOnline
+      let snapshotTransactions = transactions
+
+      if (online) {
+        const apiTxs = await fetchAllTransactions()
+        snapshotTransactions = apiTxs.map((tx) => ({
+          id: tx._id,
+          date: tx.date,
+          dateKey: tx.dateKey,
+          particulars: tx.particulars,
+          amount: tx.amount,
+          category: (tx.category || 'Other') as any,
+          mode: tx.mode as any,
+          notes: tx.notes,
+          createdAt: tx.createdAt,
+          updatedAt: tx.updatedAt,
+        }))
+      }
+
+      const data = { transactions: snapshotTransactions, settings }
+      const encoded = encodeSnapshot(data)
+      const url = `${window.location.origin}${window.location.pathname}?snapshot=${encoded}`
+      try {
+        await navigator.clipboard.writeText(url)
+        toast.success('Snapshot URL copied to clipboard')
+        return
+      } catch {
+        const el = document.createElement('textarea')
+        el.value = url
+        document.body.appendChild(el)
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+        toast.success('Snapshot URL copied to clipboard')
+      }
+    } catch (err) {
+      const u = getUserError(err, 'Failed to share snapshot')
+      toast.error(formatToastMessage(u))
+      console.error(err)
+    }
   }
 
   // Get per-category totals for reference grid

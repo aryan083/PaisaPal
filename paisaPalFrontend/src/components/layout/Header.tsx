@@ -37,7 +37,7 @@ export function Header() {
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label="Toggle theme"
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors"
+            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors lg:hidden"
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
@@ -45,7 +45,7 @@ export function Header() {
             <button
               onClick={logout}
               aria-label="Logout"
-              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors"
+              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors lg:hidden"
             >
               <LogOut className="h-4 w-4" />
             </button>

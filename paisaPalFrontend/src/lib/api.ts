@@ -125,6 +125,20 @@ export async function fetchTransactionsPaginated(filters?: TransactionFilters): 
   return res.data!;
 }
 
+export async function fetchAllTransactions(filters?: TransactionFilters): Promise<ApiTransaction[]> {
+  const limit = filters?.limit ?? 200
+  let page = filters?.page ?? 1
+  const all: ApiTransaction[] = []
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const res = await fetchTransactionsPaginated({ ...filters, page, limit })
+    all.push(...res.transactions)
+    if (page >= res.pages) return all
+    page += 1
+  }
+}
+
 export async function createTransactionApi<T>(body: T): Promise<ApiTransaction> {
   const res = await requestJson<ApiTransaction>('/transactions', {
     method: 'POST',
