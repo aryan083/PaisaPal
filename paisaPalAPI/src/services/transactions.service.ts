@@ -86,13 +86,21 @@ function validateRow(rowNumber: number, record: RawRecord) {
   console.log(`Validating row ${rowNumber}:`, JSON.stringify(record));
   const normalized = normalizeRecord(record);
   console.log(`Normalized row ${rowNumber}:`, JSON.stringify(normalized));
-  const parsed = TransactionSchema.safeParse({
-    ...normalized,
-    amount:
-      typeof normalized.amount === 'string'
-        ? Number(normalized.amount)
-        : normalized.amount,
-  });
+  let parsed:
+    | ReturnType<typeof TransactionSchema.safeParse>
+    | { success: false; error: { issues: Array<{ message: string }> } };
+  try {
+    parsed = TransactionSchema.safeParse({
+      ...normalized,
+      amount:
+        typeof normalized.amount === 'string'
+          ? Number(normalized.amount)
+          : normalized.amount,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Invalid row';
+    parsed = { success: false, error: { issues: [{ message }] } };
+  }
 
   if (parsed.success) {
     return { ok: true as const, data: parsed.data };

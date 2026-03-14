@@ -1,6 +1,8 @@
 import type { ErrorRequestHandler } from 'express';
 import mongoose from 'mongoose';
 
+import { logError } from './logger';
+
 type MongoErrorLike = {
   code?: number;
 };
@@ -10,6 +12,12 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 
   if (!isProduction) {
     console.error(err);
+  } else {
+    logError('Unhandled error', err as Error, {
+      request_id: req.requestId,
+      method: req.method,
+      url: req.originalUrl,
+    });
   }
 
   if (err instanceof mongoose.Error.CastError) {
