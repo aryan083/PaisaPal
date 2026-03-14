@@ -74,7 +74,7 @@ export function DashboardPage() {
         setSelectedCategories={setSelectedCategories}
       />
 
-      <BudgetRing />
+      <BudgetRing stats={filteredStats} />
 
       {noData ? (
         <div className="mt-8 text-center py-12 text-muted-foreground card-base">

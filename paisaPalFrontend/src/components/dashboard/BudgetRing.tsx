@@ -3,9 +3,14 @@ import { motion } from 'framer-motion'
 import { formatCurrency } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
 import { PaymentModeSplit } from '@/components/dashboard/PaymentModeSplit'
+import type { Stats } from '@/types'
 
-export function BudgetRing() {
-  const { stats, settings, updateSettings } = useStore()
+type Props = {
+  stats?: Stats | null
+}
+
+export function BudgetRing({ stats }: Props) {
+  const { settings, updateSettings } = useStore()
   const totalSpent = stats?.totalSpent ?? 0
   const budget = settings.stipend + settings.extra
   const remaining = Math.max(0, budget - totalSpent)
