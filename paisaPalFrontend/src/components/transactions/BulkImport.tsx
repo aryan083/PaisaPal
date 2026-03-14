@@ -7,6 +7,7 @@ import { getAvailableCategories, type Category } from '@/types'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import { useStore } from '@/store'
 import { useSyncStore } from '@/stores/syncStore'
+import * as XLSX from 'xlsx'
 
 const EXPECTED_HEADERS = ['Date', 'Particulars', 'Amount paid', 'Total expenses', 'Mode of payment', 'Notes', 'Category']
 
@@ -63,6 +64,11 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     }
   }
 
+  const isExcelFile = (f: File) => {
+    const name = f.name.toLowerCase()
+    return name.endsWith('.xlsx')
+  }
+
   const isUnknownCategory = (cat: string) => !categories.includes(cat)
 
   const splitCsvLine = (line: string): string[] => {
@@ -104,6 +110,34 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     return { date, particulars, amount, category, mode, notes }
   }
 
+  const normalizeClientRecordUnknown = (r: Record<string, unknown>) => {
+    const toStr = (v: unknown) => (v === null || v === undefined ? '' : String(v))
+
+    const date = r['date']
+    const particulars = r['particulars'] ?? r['description']
+    const amount = r['amount'] ?? r['amount paid'] ?? r['amount_paid']
+    const category = r['category']
+    const mode =
+      r['mode'] ??
+      r['mode of payment'] ??
+      r['mode_of_payment'] ??
+      r['payment mode'] ??
+      r['payment_mode']
+    const notes = r['notes'] ?? r['note'] ?? ''
+
+    const normalizedDate =
+      date instanceof Date ? formatDateForDisplay(date) : toStr(date)
+
+    return {
+      date: normalizedDate,
+      particulars: toStr(particulars),
+      amount: toStr(amount),
+      category: toStr(category),
+      mode: toStr(mode),
+      notes: toStr(notes),
+    }
+  }
+
   const parseCsvClient = (csv: string): Array<Record<string, string>> => {
     const lines = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
     const nonEmpty = lines.filter((l) => l.trim().length > 0)
@@ -126,6 +160,29 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     return out
   }
 
+  const parseXlsxClient = async (f: File): Promise<Array<Record<string, string>>> => {
+    const data = await f.arrayBuffer()
+    const wb = XLSX.read(data, { type: 'array', cellDates: true })
+    const sheetName = wb.SheetNames[0]
+    if (!sheetName) return []
+
+    const ws = wb.Sheets[sheetName]
+    if (!ws) return []
+
+    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+      defval: '',
+      raw: false,
+    })
+
+    return json.map((row) => {
+      const normalized: Record<string, unknown> = {}
+      Object.entries(row).forEach(([k, v]) => {
+        normalized[k.trim().toLowerCase()] = v
+      })
+      return normalizeClientRecordUnknown(normalized)
+    })
+  }
+
   const handleDryRun = async () => {
     if (!file) {
       toast.error('Please select a file first')
@@ -135,9 +192,10 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
       setLoading(true)
       const online = useSyncStore.getState().isOnline
 
+      const isExcel = isExcelFile(file)
+
       if (!online) {
-        const text = await file.text()
-        const parsed = parseCsvClient(text)
+        const parsed = isExcel ? await parseXlsxClient(file) : parseCsvClient(await file.text())
 
         const rows: PreviewRow[] = parsed.map((p, idx) => {
           const rowNumber = idx + 2
@@ -177,6 +235,90 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           toast.warning(`${errCount} rows have errors - please fix them`)
         } else {
           toast.success(`Ready to import ${rows.length} transactions (offline)`)
+        }
+        return
+      }
+
+      if (isExcel) {
+        const parsed = await parseXlsxClient(file)
+        const rows: PreviewRow[] = parsed.map((p, idx) => {
+          const rowNumber = idx + 2
+          const date = String(p.date ?? '')
+          const particulars = String(p.particulars ?? '')
+          const amount = Number(p.amount ?? 0)
+          const category = String(p.category ?? 'Other')
+          const modeRaw = String(p.mode ?? 'Online')
+          const mode: 'Online' | 'Cash' = modeRaw === 'Cash' ? 'Cash' : 'Online'
+          const notes = String(p.notes ?? '')
+
+          const err =
+            !date || !particulars || Number.isNaN(amount)
+              ? 'Invalid row'
+              : ''
+
+          return {
+            row: rowNumber,
+            date,
+            particulars,
+            amount,
+            category: (category || 'Other') as Category,
+            mode,
+            notes,
+            isDuplicate: false,
+            isSelected: !err,
+            isEditing: false,
+            ...(err ? { error: err } : {}),
+          }
+        })
+
+        const csvContent = buildCsvFromRows(rows.filter((r) => !r.error))
+        const csvBlob = new Blob([csvContent], { type: 'text/csv' })
+        const csvFile = new File([csvBlob], 'import.csv', { type: 'text/csv' })
+
+        const result = await importTransactionsCsv(csvFile, { dryRun: true })
+
+        const resultRows: PreviewRow[] = (result.preview || []).map((p) => ({
+          row: p.row,
+          date: formatDateForDisplay(p.data.date),
+          particulars: p.data.particulars,
+          amount: p.data.amount,
+          category: p.data.category as Category,
+          mode: p.data.mode as 'Online' | 'Cash',
+          notes: p.data.notes,
+          isDuplicate: p.isDuplicate,
+          isSelected: !p.isDuplicate,
+          isEditing: false,
+        }))
+
+        for (const err of result.errors) {
+          resultRows.push({
+            row: err.row,
+            date: '',
+            particulars: '',
+            amount: 0,
+            category: 'Other',
+            mode: 'Online',
+            notes: '',
+            isDuplicate: false,
+            isSelected: false,
+            isEditing: true,
+            error: err.error,
+          })
+        }
+
+        resultRows.sort((a, b) => a.row - b.row)
+
+        setPreviewRows(resultRows)
+        setStep('preview')
+
+        if (result.errors.length > 0) {
+          toast.warning(`${result.errors.length} rows have errors - please fix them`)
+        } else if (result.duplicates > 0) {
+          toast.info(
+            `Found ${result.duplicates} potential duplicates - review and select what to import`,
+          )
+        } else {
+          toast.success(`Ready to import ${resultRows.length} transactions`)
         }
         return
       }
@@ -405,7 +547,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
             <div className="border-2 border-dashed border-border rounded-xl p-6 text-center">
               <input
                 type="file"
-                accept=".csv,.tsv,.txt"
+                accept=".csv,.tsv,.txt,.xlsx"
                 onChange={handleFileChange}
                 className="hidden"
                 id="csv-upload"

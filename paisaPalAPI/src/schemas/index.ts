@@ -8,7 +8,17 @@ const parseDDMMYYYY = (val: string | Date): Date => {
   const ddmmyyyy = val.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (ddmmyyyy) {
     const [, day, month, year] = ddmmyyyy;
-    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    const date = new Date(
+      Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
     if (!isNaN(date.getTime())) return date;
   }
   
@@ -16,7 +26,17 @@ const parseDDMMYYYY = (val: string | Date): Date => {
   const isoMatch = val.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
-    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    const date = new Date(
+      Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
     if (!isNaN(date.getTime())) return date;
   }
   
