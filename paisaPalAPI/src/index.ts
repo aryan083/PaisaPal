@@ -17,7 +17,10 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL ?? '*',
+    origin: ['https://paisa-pal-c9ol.vercel.app', 'http://localhost:8080'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false,
   }),
 );
 
