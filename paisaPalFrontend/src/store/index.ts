@@ -12,6 +12,9 @@ import {
   updateTransactionApi,
 } from '@/lib/api'
 
+import { useAuthStore } from '@/stores/authStore'
+import { useSyncStore } from '@/stores/syncStore'
+
 interface AppStore {
   transactions: Transaction[]
   settings: Settings
@@ -50,6 +53,23 @@ export const useStore = create<AppStore>((set, get) => ({
   init: () => {
     void (async () => {
       set({ isLoading: true })
+
+      const auth = useAuthStore.getState()
+      const namespace = auth.user?._id ?? 'anonymous'
+
+      const cachedTxs = await getTransactions(namespace)
+      const cachedSettings = await getSettings(namespace)
+      if (cachedTxs.length > 0) {
+        set({ transactions: cachedTxs, settings: cachedSettings })
+        get().computeStats()
+      }
+
+      const online = useSyncStore.getState().isOnline
+      if (!online) {
+        set({ isLoading: false })
+        return
+      }
+
       try {
         const [apiTransactions, apiSettings] = await Promise.all([
           fetchTransactions(),
@@ -75,15 +95,12 @@ export const useStore = create<AppStore>((set, get) => ({
         }
 
         set({ transactions, settings })
-        saveTransactions(transactions)
-        saveSettings(settings)
+        await saveTransactions(transactions, namespace)
+        await saveSettings(settings, namespace)
         get().computeStats()
       } catch (err) {
         console.error(err)
-        const transactions = getTransactions()
-        const settings = getSettings()
-        set({ transactions, settings })
-        get().computeStats()
+        // keep cached
       } finally {
         set({ isLoading: false })
       }
@@ -103,23 +120,54 @@ export const useStore = create<AppStore>((set, get) => ({
 
   addTransaction: async (data) => {
     set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
+
     try {
-      const created = await createTransactionApi(data)
-      const tx: Transaction = {
-        id: created._id,
-        date: created.date,
-        particulars: created.particulars,
-        amount: created.amount,
-        category: created.category as Transaction['category'],
-        mode: created.mode,
-        notes: created.notes,
-        createdAt: created.createdAt,
-        updatedAt: created.updatedAt,
+      if (online) {
+        const created = await createTransactionApi(data)
+        const tx: Transaction = {
+          id: created._id,
+          date: created.date,
+          particulars: created.particulars,
+          amount: created.amount,
+          category: created.category as Transaction['category'],
+          mode: created.mode,
+          notes: created.notes,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+        }
+        const txs = [tx, ...get().transactions]
+        set({ transactions: txs })
+        await saveTransactions(txs, namespace)
+        get().computeStats()
+        return
       }
-      const txs = [tx, ...get().transactions]
+
+      const now = new Date().toISOString()
+      const localTx: Transaction = {
+        id: crypto.randomUUID(),
+        date: data.date,
+        particulars: data.particulars,
+        amount: data.amount,
+        category: data.category,
+        mode: data.mode,
+        notes: data.notes,
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      const txs = [localTx, ...get().transactions]
       set({ transactions: txs })
-      saveTransactions(txs)
+      await saveTransactions(txs, namespace)
       get().computeStats()
+
+      useSyncStore.getState().addToQueue({
+        operation: 'create',
+        resource: 'transaction',
+        data: { ...data, clientId: localTx.id },
+      })
     } finally {
       set({ isLoading: false })
     }
@@ -127,15 +175,32 @@ export const useStore = create<AppStore>((set, get) => ({
 
   remapCategory: async (fromCategory, toCategory) => {
     set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
     try {
-      await remapCategoryApi({ fromCategory, toCategory })
+      if (online) {
+        await remapCategoryApi({ fromCategory, toCategory })
+      }
 
       const txs = get().transactions.map(tx =>
         tx.category === fromCategory ? { ...tx, category: toCategory } : tx,
       )
       set({ transactions: txs })
-      saveTransactions(txs)
+
+      await saveTransactions(txs, namespace)
       get().computeStats()
+
+      if (!online) {
+        for (const tx of get().transactions) {
+          if (tx.category !== toCategory) continue
+          useSyncStore.getState().addToQueue({
+            operation: 'update',
+            resource: 'transaction',
+            data: { clientId: tx.id, category: toCategory },
+          })
+        }
+      }
     } finally {
       set({ isLoading: false })
     }
@@ -143,23 +208,43 @@ export const useStore = create<AppStore>((set, get) => ({
 
   updateTransaction: async (id, data) => {
     set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
+
     try {
-      const updated = await updateTransactionApi(id, data)
+      if (online) {
+        const updated = await updateTransactionApi(id, data)
+        const txs = get().transactions.map(tx =>
+          tx.id === id ? {
+            ...tx,
+            date: updated.date,
+            particulars: updated.particulars,
+            amount: updated.amount,
+            category: updated.category as Transaction['category'],
+            mode: updated.mode,
+            notes: updated.notes,
+            updatedAt: updated.updatedAt,
+          } : tx
+        )
+        set({ transactions: txs })
+        await saveTransactions(txs, namespace)
+        get().computeStats()
+        return
+      }
+
       const txs = get().transactions.map(tx =>
-        tx.id === id ? {
-          ...tx,
-          date: updated.date,
-          particulars: updated.particulars,
-          amount: updated.amount,
-          category: updated.category as Transaction['category'],
-          mode: updated.mode,
-          notes: updated.notes,
-          updatedAt: updated.updatedAt,
-        } : tx
+        tx.id === id ? { ...tx, ...data, updatedAt: new Date().toISOString() } : tx,
       )
       set({ transactions: txs })
-      saveTransactions(txs)
+      await saveTransactions(txs, namespace)
       get().computeStats()
+
+      useSyncStore.getState().addToQueue({
+        operation: 'update',
+        resource: 'transaction',
+        data: { ...data, clientId: id },
+      })
     } finally {
       set({ isLoading: false })
     }
@@ -167,11 +252,24 @@ export const useStore = create<AppStore>((set, get) => ({
 
   removeTransaction: async (id) => {
     set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
+
     try {
-      await deleteTransactionApi(id)
+      if (online) {
+        await deleteTransactionApi(id)
+      } else {
+        useSyncStore.getState().addToQueue({
+          operation: 'delete',
+          resource: 'transaction',
+          data: { clientId: id },
+        })
+      }
+
       const txs = get().transactions.filter(tx => tx.id !== id)
       set({ transactions: txs })
-      saveTransactions(txs)
+      await saveTransactions(txs, namespace)
       get().computeStats()
     } finally {
       set({ isLoading: false })
@@ -180,15 +278,33 @@ export const useStore = create<AppStore>((set, get) => ({
 
   updateSettings: async (s) => {
     set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
+
     try {
-      const updated = await updateSettingsApi(s)
-      const settings: Settings = {
-        stipend: updated.stipend,
-        extra: updated.extra,
-        categoryConfig: updated.categoryConfig ?? [],
+      if (online) {
+        const updated = await updateSettingsApi(s)
+        const settings: Settings = {
+          stipend: updated.stipend,
+          extra: updated.extra,
+          categoryConfig: updated.categoryConfig ?? [],
+        }
+        set({ settings })
+        await saveSettings(settings, namespace)
+        get().computeStats()
+        return
       }
-      set({ settings })
-      saveSettings(settings)
+
+      const next: Settings = { ...get().settings, ...s }
+      set({ settings: next })
+      await saveSettings(next, namespace)
+
+      useSyncStore.getState().addToQueue({
+        operation: 'update',
+        resource: 'settings',
+        data: s as Record<string, unknown>,
+      })
       get().computeStats()
     } finally {
       set({ isLoading: false })

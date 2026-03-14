@@ -1,7 +1,11 @@
 import type { Transaction, Settings } from '@/types'
 
-const TRANSACTIONS_KEY = 'paisa-tracker-transactions'
-const SETTINGS_KEY = 'paisa-tracker-settings'
+import {
+  cacheSettings,
+  cacheTransactions,
+  getCachedSettings,
+  getCachedTransactions,
+} from './idbStorage'
 
 const SEED_TRANSACTIONS: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { date: '2025-12-30', particulars: 'Rajkot to Ahmedabad - GSRTC Volvo', amount: 0, category: 'Bus/GSRTC', mode: 'Online', notes: '' },
@@ -34,34 +38,40 @@ const SEED_TRANSACTIONS: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[] =
 
 const DEFAULT_SETTINGS: Settings = { stipend: 12000, extra: 0, categoryConfig: [] }
 
+const DEFAULT_NAMESPACE = 'anonymous'
+
 function makeTx(data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Transaction {
   const now = new Date().toISOString()
   return { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now }
 }
 
-export function getTransactions(): Transaction[] {
-  const raw = localStorage.getItem(TRANSACTIONS_KEY)
-  if (!raw) {
-    const seeded = SEED_TRANSACTIONS.map(makeTx)
-    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(seeded))
-    return seeded
-  }
-  return JSON.parse(raw)
+export async function getTransactions(namespace?: string): Promise<Transaction[]> {
+  const ns = namespace ?? DEFAULT_NAMESPACE
+  const cached = await getCachedTransactions(ns)
+  if (cached.length > 0) return cached
+
+  const seeded = SEED_TRANSACTIONS.map(makeTx)
+  await cacheTransactions(ns, seeded)
+  return seeded
 }
 
-export function saveTransactions(txs: Transaction[]): void {
-  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(txs))
+export async function saveTransactions(
+  txs: Transaction[],
+  namespace?: string,
+): Promise<void> {
+  const ns = namespace ?? DEFAULT_NAMESPACE
+  await cacheTransactions(ns, txs)
 }
 
-export function getSettings(): Settings {
-  const raw = localStorage.getItem(SETTINGS_KEY)
-  if (!raw) {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS))
-    return DEFAULT_SETTINGS
-  }
-  return JSON.parse(raw)
+export async function getSettings(namespace?: string): Promise<Settings> {
+  const ns = namespace ?? DEFAULT_NAMESPACE
+  const cached = await getCachedSettings(ns)
+  if (cached) return cached
+  await cacheSettings(ns, DEFAULT_SETTINGS)
+  return DEFAULT_SETTINGS
 }
 
-export function saveSettings(s: Settings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+export async function saveSettings(s: Settings, namespace?: string): Promise<void> {
+  const ns = namespace ?? DEFAULT_NAMESPACE
+  await cacheSettings(ns, s)
 }

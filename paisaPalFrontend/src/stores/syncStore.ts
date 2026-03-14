@@ -3,10 +3,13 @@ import { v4 as uuidv4 } from 'uuid'
 import { persist } from 'zustand/middleware'
 import { useAuthStore } from './authStore'
 
+import { getServerId, setIdMap } from '@/lib/idbStorage'
+import { useStore } from '@/store'
+
 export type SyncOperation = {
   idempotencyKey: string
   operation: 'create' | 'update' | 'delete'
-  resource: 'transaction'
+  resource: 'transaction' | 'settings'
   data: Record<string, unknown>
   timestamp: string
 }
@@ -76,6 +79,41 @@ export const useSyncStore = create<SyncState>()(
         const token = useAuthStore.getState().token
         if (!token) return
 
+        const namespace = useAuthStore.getState().user?._id ?? 'anonymous'
+
+        const sendable: SyncOperation[] = []
+        for (const op of queue) {
+          if (op.resource === 'settings') {
+            sendable.push(op)
+            continue
+          }
+
+          if (op.operation === 'create') {
+            sendable.push(op)
+            continue
+          }
+
+          const clientId = (op.data.clientId as string | undefined) ??
+            (op.data._id as string | undefined)
+          if (!clientId) continue
+
+          const serverId = await getServerId(namespace, clientId)
+          if (!serverId) {
+            // can't sync updates/deletes until create is synced
+            continue
+          }
+
+          sendable.push({
+            ...op,
+            data: {
+              ...op.data,
+              _id: serverId,
+            },
+          })
+        }
+
+        if (sendable.length === 0) return
+
         set({ isSyncing: true })
 
         try {
@@ -85,16 +123,40 @@ export const useSyncStore = create<SyncState>()(
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ operations: queue }),
+            body: JSON.stringify({ operations: sendable }),
           })
 
           const data = await res.json()
 
           if (data.data?.results) {
+            const results = data.data.results as Array<{
+              idempotencyKey: string
+              success: boolean
+              resourceId?: string
+            }>
+
+            // Apply id mapping for successful creates
+            for (const r of results) {
+              if (!r.success || !r.resourceId) continue
+              const op = queue.find(q => q.idempotencyKey === r.idempotencyKey)
+              if (!op || op.resource !== 'transaction' || op.operation !== 'create') continue
+              const clientId = op.data.clientId as string | undefined
+              if (!clientId) continue
+
+              await setIdMap(namespace, clientId, r.resourceId)
+
+              // Update local store to replace clientId with serverId
+              const store = useStore.getState()
+              const txs = store.transactions.map(t =>
+                t.id === clientId ? { ...t, id: r.resourceId } : t,
+              )
+              useStore.setState({ transactions: txs })
+            }
+
             // Remove successful operations from queue
-            const successfulKeys = data.data.results
-              .filter((r: { success: boolean }) => r.success)
-              .map((r: { idempotencyKey: string }) => r.idempotencyKey)
+            const successfulKeys = results
+              .filter(r => r.success)
+              .map(r => r.idempotencyKey)
 
             set((state) => ({
               queue: state.queue.filter(

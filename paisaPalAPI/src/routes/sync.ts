@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { randomUUID } from 'crypto'
 import Transaction from '../models/Transaction'
+import Settings from '../models/Settings'
 import { IdempotencyKey } from '../models/IdempotencyKey'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/asyncHandler'
@@ -13,7 +14,7 @@ router.use(requireAuth)
 interface SyncOperation {
   idempotencyKey: string
   operation: 'create' | 'update' | 'delete'
-  resource: 'transaction'
+  resource: 'transaction' | 'settings'
   data: Record<string, unknown>
   timestamp: string
 }
@@ -63,72 +64,98 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
       let resourceId: string
       let response: Record<string, unknown>
 
-      switch (op.operation) {
-        case 'create':
-          const created = await Transaction.create({
-            ...op.data,
-            userId,
-          })
-          resourceId = created._id.toString()
-          response = { resourceId, data: created.toObject() }
-          
-          createAuditLog({
-            userId,
-            action: 'CREATE',
-            resource: 'transaction',
-            resourceId,
-            after: created.toObject() as unknown as Record<string, unknown>,
-            req,
-          })
-          break
+      if (op.resource === 'settings') {
+        if (op.operation !== 'update') {
+          throw new Error(`Unsupported operation for settings: ${op.operation}`)
+        }
 
-        case 'update':
-          const updated = await Transaction.findOneAndUpdate(
-            { _id: op.data._id, userId },
-            op.data,
-            { new: true, runValidators: true }
-          ).lean()
-          
-          if (!updated) {
-            throw new Error('Transaction not found')
-          }
-          resourceId = updated._id.toString()
-          response = { resourceId, data: updated }
-          
-          createAuditLog({
-            userId,
-            action: 'UPDATE',
-            resource: 'transaction',
-            resourceId,
-            after: updated as Record<string, unknown>,
-            req,
-          })
-          break
+        const before = await Settings.findOne({ userId }).lean()
+        const settings = await Settings.findOneAndUpdate(
+          { userId },
+          { $set: op.data },
+          { new: true, upsert: true, runValidators: true },
+        ).lean()
 
-        case 'delete':
-          const deleted = await Transaction.findOneAndDelete({
-            _id: op.data._id,
-            userId,
-          }).lean()
-          
-          if (!deleted) {
-            throw new Error('Transaction not found')
-          }
-          resourceId = deleted._id.toString()
-          response = { resourceId }
-          
-          createAuditLog({
-            userId,
-            action: 'DELETE',
-            resource: 'transaction',
-            resourceId,
-            before: deleted as Record<string, unknown>,
-            req,
-          })
-          break
+        resourceId = userId
+        response = { resourceId, data: settings as unknown as Record<string, unknown> }
 
-        default:
-          throw new Error(`Unknown operation: ${op.operation}`)
+        createAuditLog({
+          userId,
+          action: 'UPDATE',
+          resource: 'settings',
+          resourceId,
+          before: before ?? undefined,
+          after: settings ? (settings as unknown as Record<string, unknown>) : undefined,
+          req,
+        })
+      } else {
+        switch (op.operation) {
+          case 'create':
+            const created = await Transaction.create({
+              ...op.data,
+              userId,
+            })
+            resourceId = created._id.toString()
+            response = { resourceId, data: created.toObject() }
+
+            createAuditLog({
+              userId,
+              action: 'CREATE',
+              resource: 'transaction',
+              resourceId,
+              after: created.toObject() as unknown as Record<string, unknown>,
+              req,
+            })
+            break
+
+          case 'update':
+            const updated = await Transaction.findOneAndUpdate(
+              { _id: op.data._id, userId },
+              op.data,
+              { new: true, runValidators: true }
+            ).lean()
+
+            if (!updated) {
+              throw new Error('Transaction not found')
+            }
+            resourceId = updated._id.toString()
+            response = { resourceId, data: updated }
+
+            createAuditLog({
+              userId,
+              action: 'UPDATE',
+              resource: 'transaction',
+              resourceId,
+              after: updated as Record<string, unknown>,
+              req,
+            })
+            break
+
+          case 'delete':
+            const deleted = await Transaction.findOneAndDelete({
+              _id: op.data._id,
+              userId,
+            }).lean()
+
+            if (!deleted) {
+              throw new Error('Transaction not found')
+            }
+            resourceId = deleted._id.toString()
+            response = { resourceId }
+
+            createAuditLog({
+              userId,
+              action: 'DELETE',
+              resource: 'transaction',
+              resourceId,
+              before: deleted as Record<string, unknown>,
+              req,
+            })
+            break
+
+          default:
+            throw new Error(`Unknown operation: ${op.operation}`)
+        }
       }
 
       // Store idempotency key with response
