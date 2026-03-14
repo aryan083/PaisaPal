@@ -16,20 +16,45 @@ const Index = () => {
   const { activeTab, theme, init, applySnapshot } = useStore()
   const { isAuthenticated, checkAuth, token, hasHydrated, isLoading } = useAuthStore()
 
+  const snapshotFromUrl = () => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('snapshot')
+  }
+
+  const snapshotFromSession = () => {
+    try {
+      return sessionStorage.getItem('pending_snapshot')
+    } catch {
+      return null
+    }
+  }
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
   useEffect(() => {
-    if (isAuthenticated) {
+    const pending = snapshotFromUrl() ?? snapshotFromSession()
+    if (isAuthenticated && !pending) {
       init()
     }
   }, [isAuthenticated, init])
 
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated) {
+      const encoded = snapshotFromUrl()
+      if (encoded) {
+        try {
+          sessionStorage.setItem('pending_snapshot', encoded)
+        } catch {
+          // ignore
+        }
+      }
+      return
+    }
+
     const params = new URLSearchParams(window.location.search)
-    const encoded = params.get('snapshot')
+    const encoded = params.get('snapshot') ?? snapshotFromSession()
     if (!encoded) return
 
     try {
@@ -45,6 +70,11 @@ const Index = () => {
         transactions: parsed.transactions as any,
         settings: parsed.settings as any,
       }).then(() => {
+        try {
+          sessionStorage.removeItem('pending_snapshot')
+        } catch {
+          // ignore
+        }
         params.delete('snapshot')
         const next = params.toString()
         const url = `${window.location.pathname}${next ? `?${next}` : ''}`
