@@ -3,7 +3,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { toast } from 'sonner'
 import { Upload, Eye, Copy, Check, X, Edit2, Trash2 } from 'lucide-react'
 import { importTransactionsCsv, type ImportResult } from '@/lib/api'
-import { CATEGORIES, type Category } from '@/types'
+import { getAvailableCategories, type Category } from '@/types'
+import { formatToastMessage, getUserError } from '@/lib/userError'
+import { useStore } from '@/store'
 
 const EXPECTED_HEADERS = ['Date', 'Particulars', 'Amount paid', 'Total expenses', 'Mode of payment', 'Notes', 'Category']
 
@@ -27,11 +29,30 @@ interface BulkImportProps {
 }
 
 export function BulkImport({ open, onClose }: BulkImportProps) {
+  const { settings, updateSettings } = useStore()
   const [file, setFile] = useState<File | null>(null)
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<'input' | 'preview' | 'result'>('input')
+
+  const categories = getAvailableCategories(settings)
+
+  const addCategory = async (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    if (categories.includes(trimmed)) return
+
+    const next = [...(settings.categoryConfig ?? []), { name: trimmed, color: '#6080a0' }]
+    try {
+      await updateSettings({ categoryConfig: next })
+      toast.success(`Added category: ${trimmed}`)
+    } catch (err) {
+      const u = getUserError(err, 'Failed to add category')
+      toast.error(formatToastMessage(u))
+      console.error(err)
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -39,6 +60,8 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
       setFile(f)
     }
   }
+
+  const isUnknownCategory = (cat: string) => !categories.includes(cat)
 
   const handleDryRun = async () => {
     if (!file) {
@@ -94,7 +117,8 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
         toast.success(`Ready to import ${rows.length} transactions`)
       }
     } catch (err) {
-      toast.error('Failed to preview import')
+      const u = getUserError(err, 'Failed to preview import')
+      toast.error(formatToastMessage(u))
       console.error(err)
     } finally {
       setLoading(false)
@@ -168,7 +192,8 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
       setStep('result')
       toast.success(`Imported ${result.inserted} transactions`)
     } catch (err) {
-      toast.error('Failed to import transactions')
+      const u = getUserError(err, 'Failed to import transactions')
+      toast.error(formatToastMessage(u))
       console.error(err)
     } finally {
       setLoading(false)
@@ -354,7 +379,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                                 onChange={e => updateRow(row.row, 'category', e.target.value)}
                                 className="px-1 py-0.5 text-xs rounded border border-border bg-background"
                               >
-                                {CATEGORIES.map(c => (
+                                {categories.map(c => (
                                   <option key={c} value={c}>{c}</option>
                                 ))}
                               </select>
@@ -383,7 +408,21 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                             <td className="px-2 py-1 text-xs">{row.date}</td>
                             <td className="px-2 py-1 text-xs truncate max-w-[150px]">{row.particulars}</td>
                             <td className="px-2 py-1 text-xs text-right">₹{row.amount}</td>
-                            <td className="px-2 py-1 text-xs">{row.category}</td>
+                            <td className="px-2 py-1 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span>{row.category}</span>
+                                {isUnknownCategory(row.category) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void addCategory(row.category)}
+                                    className="text-[10px] rounded-md bg-secondary px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                                    title="Add this category to your Settings"
+                                  >
+                                    Add
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-2 py-1 text-xs">{row.mode}</td>
                             <td className="px-2 py-1 text-xs truncate max-w-[100px]">{row.notes}</td>
                           </>

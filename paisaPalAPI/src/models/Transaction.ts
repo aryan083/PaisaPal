@@ -1,15 +1,6 @@
 import mongoose, { type Document, type Model, Schema } from 'mongoose';
 
-export type Category =
-  | 'Rapido'
-  | 'Bus/GSRTC'
-  | 'Food & Drinks'
-  | 'Shopping'
-  | 'Social'
-  | 'Recharge/Bills'
-  | 'Self Care'
-  | 'Transfer/Sent'
-  | 'Other';
+export type Category = string;
 
 export type Mode = 'Online' | 'Cash';
 
@@ -34,17 +25,7 @@ const transactionSchema = new Schema<ITransaction>(
     category: {
       type: String,
       required: true,
-      enum: [
-        'Rapido',
-        'Bus/GSRTC',
-        'Food & Drinks',
-        'Shopping',
-        'Social',
-        'Recharge/Bills',
-        'Self Care',
-        'Transfer/Sent',
-        'Other',
-      ],
+      maxlength: 50,
       index: true,
     },
     mode: {

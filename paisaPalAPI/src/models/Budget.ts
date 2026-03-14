@@ -16,17 +16,7 @@ const budgetSchema = new Schema<IBudget>(
     category: {
       type: String,
       required: true,
-      enum: [
-        'Rapido',
-        'Bus/GSRTC',
-        'Food & Drinks',
-        'Shopping',
-        'Social',
-        'Recharge/Bills',
-        'Self Care',
-        'Transfer/Sent',
-        'Other',
-      ],
+      maxlength: 50,
     },
     monthlyLimit: { type: Number, required: true, min: 0 },
     month: { type: String, required: true }, // YYYY-MM format

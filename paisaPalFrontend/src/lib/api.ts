@@ -1,7 +1,14 @@
+import { ApiError } from './userError'
+
 type ApiResponse<T> = {
   data: T | null;
   error: string | null;
   message?: string;
+  errorCode?: string;
+  suggestion?: string;
+  requestId?: string;
+  details?: unknown;
+  fieldErrors?: Record<string, string[]>;
 };
 
 function getApiBaseUrl(): string {
@@ -34,6 +41,11 @@ async function requestJson<T>(
   });
 
   const json = (await res.json()) as ApiResponse<T>;
+
+  if (!res.ok || json.error) {
+    throw new ApiError(json.error ?? 'Request failed', res.status, json)
+  }
+
   return json;
 }
 
@@ -92,19 +104,13 @@ function buildQueryParams(filters: TransactionFilters): string {
 export async function fetchTransactions(filters?: TransactionFilters): Promise<ApiTransaction[]> {
   const query = filters ? buildQueryParams(filters) : '?limit=100';
   const res = await requestJson<ListTransactionsData>(`/transactions${query}`);
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch transactions');
-  }
-  return res.data.transactions;
+  return res.data!.transactions;
 }
 
 export async function fetchTransactionsPaginated(filters?: TransactionFilters): Promise<ListTransactionsData> {
   const query = filters ? buildQueryParams(filters) : '?limit=50';
   const res = await requestJson<ListTransactionsData>(`/transactions${query}`);
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch transactions');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function createTransactionApi<T>(body: T): Promise<ApiTransaction> {
@@ -112,10 +118,7 @@ export async function createTransactionApi<T>(body: T): Promise<ApiTransaction> 
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to create transaction');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function updateTransactionApi<T>(
@@ -126,25 +129,40 @@ export async function updateTransactionApi<T>(
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to update transaction');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function deleteTransactionApi(id: string): Promise<void> {
-  const res = await requestJson<null>(`/transactions/${id}`, { method: 'DELETE' });
-  if (res.error) {
-    throw new Error(res.error);
+  try {
+    await requestJson<null>(`/transactions/${id}`, { method: 'DELETE' });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    } else {
+      throw new ApiError('Failed to delete transaction', 500, error);
+    }
   }
 }
 
 export async function exportTransactionsCsv(filters?: TransactionFilters): Promise<string> {
   const query = filters ? buildQueryParams(filters) : '';
-  const res = await fetch(`${getApiBaseUrl()}/transactions/export/csv${query}`);
+  const token = getAuthToken()
+  const res = await fetch(`${getApiBaseUrl()}/transactions/export/csv${query}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
   if (!res.ok) {
-    throw new Error('Failed to export transactions');
+    let payload: ApiResponse<null> | undefined
+    try {
+      payload = (await res.json()) as ApiResponse<null>
+    } catch {
+      payload = undefined
+    }
+    throw new ApiError(payload?.error ?? 'Failed to export transactions', res.status, payload)
   }
+
   return res.text();
 }
 
@@ -210,20 +228,21 @@ export async function importTransactionsCsv(
   });
 
   const json = (await res.json()) as ApiResponse<ImportResult>;
-  if (!json.data || json.error) {
-    throw new Error(json.error ?? 'Failed to import transactions');
+  if (!res.ok || json.error || !json.data) {
+    throw new ApiError(json.error ?? 'Failed to import transactions', res.status, json)
   }
   return json.data;
 }
 
-export type ApiSettings = { stipend: number; extra: number };
+export type ApiSettings = {
+  stipend: number;
+  extra: number;
+  categoryConfig?: Array<{ name: string; color: string }>;
+};
 
 export async function fetchSettings(): Promise<ApiSettings> {
   const res = await requestJson<ApiSettings>('/settings');
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch settings');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function updateSettingsApi(
@@ -233,20 +252,32 @@ export async function updateSettingsApi(
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to update settings');
-  }
-  return res.data;
+  return res.data!;
+}
+
+export type RemapCategoryBody = { fromCategory: string; toCategory: string };
+
+export type RemapCategoryResult = {
+  transactionsModified: number;
+  budgetsModified: number;
+  recurringRulesModified: number;
+};
+
+export async function remapCategoryApi(
+  body: RemapCategoryBody,
+): Promise<RemapCategoryResult> {
+  const res = await requestJson<RemapCategoryResult>('/transactions/remap-category', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
 }
 
 export type ApiStats = Record<string, unknown>;
 
 export async function fetchStats(): Promise<ApiStats> {
   const res = await requestJson<ApiStats>('/stats');
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch stats');
-  }
-  return res.data;
+  return res.data!;
 }
 
 // Recurring Rules API
@@ -287,10 +318,7 @@ export type RecurringRuleInput = {
 
 export async function fetchRecurringRules(): Promise<ApiRecurringRule[]> {
   const res = await requestJson<ApiRecurringRule[]>('/recurring');
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch recurring rules');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function createRecurringRule(body: RecurringRuleInput): Promise<ApiRecurringRule> {
@@ -298,10 +326,7 @@ export async function createRecurringRule(body: RecurringRuleInput): Promise<Api
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to create recurring rule');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function updateRecurringRule(id: string, body: Partial<RecurringRuleInput>): Promise<ApiRecurringRule> {
@@ -309,17 +334,11 @@ export async function updateRecurringRule(id: string, body: Partial<RecurringRul
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to update recurring rule');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function deleteRecurringRule(id: string): Promise<void> {
-  const res = await requestJson<null>(`/recurring/${id}`, { method: 'DELETE' });
-  if (res.error) {
-    throw new Error(res.error);
-  }
+  await requestJson<null>(`/recurring/${id}`, { method: 'DELETE' });
 }
 
 export type PreviewResult = {
@@ -333,10 +352,7 @@ export async function previewRecurringRule(body: RecurringRuleInput, count?: num
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to preview recurring rule');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export type RunResult = {
@@ -355,10 +371,7 @@ export type RunResult = {
 export async function runRecurringRules(dryRun?: boolean): Promise<RunResult> {
   const query = dryRun ? '?dryRun=true' : '';
   const res = await requestJson<RunResult>(`/recurring/run${query}`);
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to run recurring rules');
-  }
-  return res.data;
+  return res.data!;
 }
 
 // Budgets API
@@ -396,10 +409,7 @@ export type BudgetStatsData = {
 export async function fetchBudgets(month?: string): Promise<ApiBudget[]> {
   const query = month ? `?month=${month}` : '';
   const res = await requestJson<ApiBudget[]>(`/budgets${query}`);
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch budgets');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function createBudget(body: BudgetInput): Promise<ApiBudget> {
@@ -407,10 +417,7 @@ export async function createBudget(body: BudgetInput): Promise<ApiBudget> {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to create budget');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function updateBudget(id: string, body: { monthlyLimit: number }): Promise<ApiBudget> {
@@ -418,25 +425,16 @@ export async function updateBudget(id: string, body: { monthlyLimit: number }): 
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to update budget');
-  }
-  return res.data;
+  return res.data!;
 }
 
 export async function deleteBudget(id: string): Promise<void> {
-  const res = await requestJson<null>(`/budgets/${id}`, { method: 'DELETE' });
-  if (res.error) {
-    throw new Error(res.error);
-  }
+  await requestJson<null>(`/budgets/${id}`, { method: 'DELETE' });
 }
 
 export async function fetchBudgetStats(month: string): Promise<BudgetStatsData> {
   const res = await requestJson<BudgetStatsData>(`/budgets/stats?month=${month}`);
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch budget stats');
-  }
-  return res.data;
+  return res.data!;
 }
 
 // Audit Log API
@@ -460,8 +458,5 @@ export async function fetchAuditLogs(limit?: number, resource?: string): Promise
   if (resource) params.set('resource', resource);
   const query = params.toString();
   const res = await requestJson<ApiAuditLog[]>(`/audit${query ? `?${query}` : ''}`);
-  if (!res.data || res.error) {
-    throw new Error(res.error ?? 'Failed to fetch audit logs');
-  }
-  return res.data;
+  return res.data!;
 }

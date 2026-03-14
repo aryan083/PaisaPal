@@ -11,7 +11,7 @@ export async function getSettings(req: Request, res: Response) {
 
   const settings = await Settings.findOneAndUpdate(
     { userId },
-    { $setOnInsert: { userId, stipend: 12000, extra: 0 } },
+    { $setOnInsert: { userId, stipend: 12000, extra: 0, categoryConfig: [] } },
     { new: true, upsert: true },
   ).lean();
 

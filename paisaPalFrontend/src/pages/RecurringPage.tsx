@@ -13,8 +13,10 @@ import {
   type RecurringRuleInput,
 } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { CATEGORIES, CATEGORY_HEX, type Category, type Frequency } from '@/types'
+import { getAvailableCategories, getCategoryHex, type Category, type Frequency } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { formatToastMessage, getUserError } from '@/lib/userError'
+import { useStore } from '@/store'
 
 const FREQUENCY_LABELS: Record<Frequency, string> = {
   daily: 'Daily',
@@ -24,6 +26,7 @@ const FREQUENCY_LABELS: Record<Frequency, string> = {
 }
 
 export function RecurringPage() {
+  const { settings } = useStore()
   const [rules, setRules] = useState<ApiRecurringRule[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
@@ -31,13 +34,16 @@ export function RecurringPage() {
   const [previewData, setPreviewData] = useState<{ dates: string[]; visible: boolean }>({ dates: [], visible: false })
   const [running, setRunning] = useState(false)
 
+  const categories = getAvailableCategories(settings)
+
   const loadRules = async () => {
     try {
       setLoading(true)
       const data = await fetchRecurringRules()
       setRules(data)
     } catch (err) {
-      toast.error('Failed to load recurring rules')
+      const u = getUserError(err, 'Failed to load recurring rules')
+      toast.error(formatToastMessage(u))
       console.error(err)
     } finally {
       setLoading(false)
@@ -55,7 +61,8 @@ export function RecurringPage() {
       setFormOpen(false)
       void loadRules()
     } catch (err) {
-      toast.error('Failed to create rule')
+      const u = getUserError(err, 'Failed to create rule')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -68,7 +75,8 @@ export function RecurringPage() {
       setEditingRule(null)
       void loadRules()
     } catch (err) {
-      toast.error('Failed to update rule')
+      const u = getUserError(err, 'Failed to update rule')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -79,7 +87,8 @@ export function RecurringPage() {
       toast.success('Rule deleted')
       void loadRules()
     } catch (err) {
-      toast.error('Failed to delete rule')
+      const u = getUserError(err, 'Failed to delete rule')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -89,7 +98,8 @@ export function RecurringPage() {
       const result = await previewRecurringRule(rule, 5)
       setPreviewData({ dates: result.nextOccurrences, visible: true })
     } catch (err) {
-      toast.error('Failed to preview')
+      const u = getUserError(err, 'Failed to preview')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -105,7 +115,8 @@ export function RecurringPage() {
         void loadRules()
       }
     } catch (err) {
-      toast.error('Failed to run rules')
+      const u = getUserError(err, 'Failed to run rules')
+      toast.error(formatToastMessage(u))
       console.error(err)
     } finally {
       setRunning(false)
@@ -209,7 +220,10 @@ export function RecurringPage() {
                     <span className="font-semibold text-foreground">{formatCurrency(rule.amount)}</span>
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
-                      style={{ background: `${CATEGORY_HEX[rule.category as Category]}18`, color: CATEGORY_HEX[rule.category as Category] }}
+                      style={{
+                        background: `${getCategoryHex(rule.category, settings)}18`,
+                        color: getCategoryHex(rule.category, settings),
+                      }}
                     >
                       {rule.category}
                     </span>
@@ -447,7 +461,7 @@ function RuleFormSheet({ open, onClose, rule, onCreate, onUpdate, onPreview }: R
               onChange={e => setCategory(e.target.value as Category)}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 

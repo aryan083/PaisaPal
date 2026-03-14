@@ -1,13 +1,4 @@
-export type Category =
-  | 'Rapido'
-  | 'Bus/GSRTC'
-  | 'Food & Drinks'
-  | 'Shopping'
-  | 'Social'
-  | 'Recharge/Bills'
-  | 'Self Care'
-  | 'Transfer/Sent'
-  | 'Other';
+export type Category = string;
 
 export type Mode = 'Online' | 'Cash';
 
@@ -15,4 +6,9 @@ export interface ApiResponse<T> {
   data: T | null;
   error: string | null;
   message?: string;
+  errorCode?: string;
+  suggestion?: string;
+  requestId?: string;
+  details?: unknown;
+  fieldErrors?: Record<string, string[]>;
 }

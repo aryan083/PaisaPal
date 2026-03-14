@@ -30,6 +30,9 @@ export async function getRecurringRule(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Recurring rule not found',
+      errorCode: 'RECURRING_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -84,6 +87,9 @@ export async function updateRecurringRule(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Recurring rule not found',
+      errorCode: 'RECURRING_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -128,6 +134,9 @@ export async function deleteRecurringRule(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Recurring rule not found',
+      errorCode: 'RECURRING_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 

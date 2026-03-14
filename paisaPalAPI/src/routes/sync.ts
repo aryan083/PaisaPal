@@ -37,6 +37,9 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
     return res.status(400).json({
       data: null,
       error: 'No operations to sync',
+      errorCode: 'SYNC_EMPTY',
+      suggestion: 'Please try again after making some changes.',
+      requestId: req.requestId,
     })
   }
 

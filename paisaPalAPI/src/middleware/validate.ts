@@ -9,10 +9,21 @@ export const validate = (schema: ZodSchema, target: ValidationTarget = 'body') =
     const result = schema.safeParse(toValidate);
 
     if (!result.success) {
+      const flat = result.error.flatten();
+      const fieldErrors: Record<string, string[]> = {};
+      for (const [key, value] of Object.entries(flat.fieldErrors)) {
+        if (value && value.length > 0) {
+          fieldErrors[key] = value;
+        }
+      }
       return res.status(400).json({
         data: null,
         error: 'Validation failed',
-        details: result.error.flatten(),
+        errorCode: 'VALIDATION_FAILED',
+        suggestion: 'Please fix the highlighted fields and try again.',
+        requestId: req.requestId,
+        details: flat,
+        fieldErrors,
       });
     }
 

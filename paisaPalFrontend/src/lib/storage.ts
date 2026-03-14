@@ -32,7 +32,7 @@ const SEED_TRANSACTIONS: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[] =
   { date: '2026-03-10', particulars: 'Send to Adii', amount: 100, category: 'Transfer/Sent', mode: 'Online', notes: '' },
 ]
 
-const DEFAULT_SETTINGS: Settings = { stipend: 12000, extra: 0 }
+const DEFAULT_SETTINGS: Settings = { stipend: 12000, extra: 0, categoryConfig: [] }
 
 function makeTx(data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Transaction {
   const now = new Date().toISOString()

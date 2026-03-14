@@ -1,11 +1,25 @@
-export const CATEGORIES = [
-  'Rapido', 'Bus/GSRTC', 'Food & Drinks', 'Shopping',
-  'Social', 'Recharge/Bills', 'Self Care', 'Transfer/Sent', 'Other'
+export const DEFAULT_CATEGORIES = [
+  'Rapido',
+  'Bus/GSRTC',
+  'Food & Drinks',
+  'Shopping',
+  'Social',
+  'Recharge/Bills',
+  'Self Care',
+  'Transfer/Sent',
+  'Other',
 ] as const
 
-export type Category = typeof CATEGORIES[number]
+export const CATEGORIES = DEFAULT_CATEGORIES
+
+export type Category = string
 export type PaymentMode = 'Online' | 'Cash'
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+export interface CategoryConfigEntry {
+  name: string
+  color: string
+}
 
 export interface Transaction {
   id: string
@@ -22,6 +36,7 @@ export interface Transaction {
 export interface Settings {
   stipend: number
   extra: number
+  categoryConfig?: CategoryConfigEntry[]
 }
 
 export interface Stats {
@@ -127,26 +142,7 @@ export interface ImportResult {
 
 export type TabId = 'dashboard' | 'transactions' | 'recurring' | 'budgets' | 'insights' | 'settings'
 
-export const CATEGORY_KEY_MAP: Record<Category, string> = {
-  'Rapido': 'rapido',
-  'Bus/GSRTC': 'bus',
-  'Food & Drinks': 'food',
-  'Shopping': 'shopping',
-  'Social': 'social',
-  'Recharge/Bills': 'recharge',
-  'Self Care': 'selfcare',
-  'Transfer/Sent': 'transfer',
-  'Other': 'other',
-}
-
-export function getCategoryColorClass(category: Category, type: 'text' | 'bg' | 'bg-soft' = 'text'): string {
-  const key = CATEGORY_KEY_MAP[category]
-  if (type === 'text') return `category-${key}`
-  if (type === 'bg') return `bg-category-${key}`
-  return `bg-category-${key}-soft`
-}
-
-export const CATEGORY_HEX: Record<Category, string> = {
+export const DEFAULT_CATEGORY_HEX: Record<(typeof DEFAULT_CATEGORIES)[number], string> = {
   'Rapido': '#ff6b35',
   'Bus/GSRTC': '#00d4a4',
   'Food & Drinks': '#ff4f6a',
@@ -156,4 +152,22 @@ export const CATEGORY_HEX: Record<Category, string> = {
   'Self Care': '#ff80c8',
   'Transfer/Sent': '#ff6080',
   'Other': '#6080a0',
+}
+
+export const CATEGORY_HEX: Record<string, string> = { ...DEFAULT_CATEGORY_HEX }
+
+export function getAvailableCategories(settings?: Settings): string[] {
+  const custom = (settings?.categoryConfig ?? []).map(c => c.name)
+  const merged = [...DEFAULT_CATEGORIES, ...custom]
+  return Array.from(new Set(merged)).sort((a, b) => a.localeCompare(b))
+}
+
+export function getCategoryHex(
+  category: string,
+  settings?: Settings,
+): string {
+  const custom = settings?.categoryConfig?.find(c => c.name === category)
+  if (custom?.color) return custom.color
+  const known = CATEGORY_HEX[category]
+  return known ?? '#6080a0'
 }

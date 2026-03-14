@@ -13,8 +13,10 @@ import {
   type BudgetStatsData,
 } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
-import { CATEGORIES, CATEGORY_HEX, type Category } from '@/types'
+import { getAvailableCategories, getCategoryHex, type Category } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { formatToastMessage, getUserError } from '@/lib/userError'
+import { useStore } from '@/store'
 
 function getCurrentMonth(): string {
   const now = new Date()
@@ -22,12 +24,15 @@ function getCurrentMonth(): string {
 }
 
 export function BudgetsPage() {
+  const { settings } = useStore()
   const [budgets, setBudgets] = useState<ApiBudget[]>([])
   const [stats, setStats] = useState<BudgetStatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(getCurrentMonth())
   const [formOpen, setFormOpen] = useState(false)
   const [editingBudget, setEditingBudget] = useState<ApiBudget | null>(null)
+
+  const categories = getAvailableCategories(settings)
 
   const loadData = async () => {
     try {
@@ -39,7 +44,8 @@ export function BudgetsPage() {
       setBudgets(budgetData)
       setStats(statsData)
     } catch (err) {
-      toast.error('Failed to load budgets')
+      const u = getUserError(err, 'Failed to load budgets')
+      toast.error(formatToastMessage(u))
       console.error(err)
     } finally {
       setLoading(false)
@@ -57,8 +63,8 @@ export function BudgetsPage() {
       setFormOpen(false)
       void loadData()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create budget'
-      toast.error(message)
+      const u = getUserError(err, 'Failed to create budget')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -71,7 +77,8 @@ export function BudgetsPage() {
       setEditingBudget(null)
       void loadData()
     } catch (err) {
-      toast.error('Failed to update budget')
+      const u = getUserError(err, 'Failed to update budget')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -82,7 +89,8 @@ export function BudgetsPage() {
       toast.success('Budget deleted')
       void loadData()
     } catch (err) {
-      toast.error('Failed to delete budget')
+      const u = getUserError(err, 'Failed to delete budget')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -198,7 +206,7 @@ export function BudgetsPage() {
                         )}
                         <span
                           className="font-semibold"
-                          style={{ color: CATEGORY_HEX[stat.category as Category] }}
+                          style={{ color: getCategoryHex(stat.category, settings) }}
                         >
                           {stat.category}
                         </span>
@@ -278,6 +286,7 @@ export function BudgetsPage() {
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         existingCategories={budgets.map(b => b.category)}
+        categories={categories}
       />
     </motion.div>
   )
@@ -291,9 +300,19 @@ interface BudgetFormSheetProps {
   onCreate: (input: BudgetInput) => void
   onUpdate: (id: string, monthlyLimit: number) => void
   existingCategories: string[]
+  categories: string[]
 }
 
-function BudgetFormSheet({ open, onClose, budget, month, onCreate, onUpdate, existingCategories }: BudgetFormSheetProps) {
+function BudgetFormSheet({
+  open,
+  onClose,
+  budget,
+  month,
+  onCreate,
+  onUpdate,
+  existingCategories,
+  categories,
+}: BudgetFormSheetProps) {
   const [category, setCategory] = useState<Category>('Other')
   const [monthlyLimit, setMonthlyLimit] = useState('')
 
@@ -308,8 +327,8 @@ function BudgetFormSheet({ open, onClose, budget, month, onCreate, onUpdate, exi
   }, [budget, open])
 
   const availableCategories = budget
-    ? CATEGORIES
-    : CATEGORIES.filter(c => !existingCategories.includes(c))
+    ? categories
+    : categories.filter(c => !existingCategories.includes(c))
 
   const handleSubmit = () => {
     if (!monthlyLimit || parseFloat(monthlyLimit) <= 0) {

@@ -1,13 +1,15 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { CATEGORY_HEX, type Category } from '@/types'
+import { getCategoryHex } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import type { Stats } from '@/types'
+import { useStore } from '@/store'
 
 interface Props {
   stats: Stats | null
 }
 
 export function AvgTransactionByCategory({ stats }: Props) {
+  const { settings } = useStore()
   const data = (stats?.byCategory ?? [])
     .filter(c => c.count > 0)
     .map(c => ({
@@ -41,21 +43,35 @@ export function AvgTransactionByCategory({ stats }: Props) {
               tickLine={false}
             />
             <Tooltip
-              formatter={(value: number, _name: string, props: { payload: { category: string; count: number } }) => [
-                `${formatCurrency(value)} avg (${props.payload.count} txns)`,
-                props.payload.category,
-              ]}
-              contentStyle={{
-                background: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '12px',
-                fontSize: '12px',
-                color: 'hsl(var(--foreground))',
+              cursor={{ fill: 'hsl(var(--muted) / 0.35)' }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null
+                const p = payload[0]
+                const v = typeof p.value === 'number' ? p.value : Number(p.value)
+                const cat = (p.payload as { category: string; count: number }).category
+                const count = (p.payload as { category: string; count: number }).count
+
+                return (
+                  <div
+                    className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs shadow-xl"
+                    style={{ color: 'hsl(var(--foreground))' }}
+                  >
+                    <div className="font-medium text-foreground">{cat}</div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Avg</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(v)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Transactions</span>
+                      <span className="font-semibold text-foreground">{count}</span>
+                    </div>
+                  </div>
+                )
               }}
             />
             <Bar dataKey="avg" radius={[6, 6, 0, 0]} barSize={24}>
               {data.map(entry => (
-                <Cell key={entry.category} fill={CATEGORY_HEX[entry.category as Category]} />
+                <Cell key={entry.category} fill={getCategoryHex(entry.category, settings)} />
               ))}
             </Bar>
           </BarChart>

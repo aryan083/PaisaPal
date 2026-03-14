@@ -7,6 +7,7 @@ import {
   deleteTransactionApi,
   fetchSettings,
   fetchTransactions,
+  remapCategoryApi,
   updateSettingsApi,
   updateTransactionApi,
 } from '@/lib/api'
@@ -26,16 +27,19 @@ interface AppStore {
   setTheme: (t: 'dark' | 'light') => void
   openForm: (tx?: Transaction) => void
   closeForm: () => void
-  addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => void
-  updateTransaction: (id: string, data: Partial<Transaction>) => void
-  removeTransaction: (id: string) => void
-  updateSettings: (s: Partial<Settings>) => void
+  addTransaction: (
+    tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => Promise<void>
+  updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>
+  removeTransaction: (id: string) => Promise<void>
+  updateSettings: (s: Partial<Settings>) => Promise<void>
+  remapCategory: (fromCategory: string, toCategory: string) => Promise<void>
   computeStats: () => void
 }
 
 export const useStore = create<AppStore>((set, get) => ({
   transactions: [],
-  settings: { stipend: 12000, extra: 0 },
+  settings: { stipend: 12000, extra: 0, categoryConfig: [] },
   stats: null,
   activeTab: 'dashboard',
   theme: (localStorage.getItem('paisa-theme') as 'dark' | 'light') || 'dark',
@@ -67,6 +71,7 @@ export const useStore = create<AppStore>((set, get) => ({
         const settings: Settings = {
           stipend: apiSettings.stipend,
           extra: apiSettings.extra,
+          categoryConfig: apiSettings.categoryConfig ?? [],
         }
 
         set({ transactions, settings })
@@ -96,97 +101,98 @@ export const useStore = create<AppStore>((set, get) => ({
   openForm: (tx) => set({ formOpen: true, editingTransaction: tx || null }),
   closeForm: () => set({ formOpen: false, editingTransaction: null }),
 
-  addTransaction: (data) => {
-    void (async () => {
-      set({ isLoading: true })
-      try {
-        const created = await createTransactionApi(data)
-        const tx: Transaction = {
-          id: created._id,
-          date: created.date,
-          particulars: created.particulars,
-          amount: created.amount,
-          category: created.category as Transaction['category'],
-          mode: created.mode,
-          notes: created.notes,
-          createdAt: created.createdAt,
-          updatedAt: created.updatedAt,
-        }
-        const txs = [tx, ...get().transactions]
-        set({ transactions: txs })
-        saveTransactions(txs)
-        get().computeStats()
-      } catch (err) {
-        console.error(err)
-      } finally {
-        set({ isLoading: false })
+  addTransaction: async (data) => {
+    set({ isLoading: true })
+    try {
+      const created = await createTransactionApi(data)
+      const tx: Transaction = {
+        id: created._id,
+        date: created.date,
+        particulars: created.particulars,
+        amount: created.amount,
+        category: created.category as Transaction['category'],
+        mode: created.mode,
+        notes: created.notes,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
       }
-    })()
+      const txs = [tx, ...get().transactions]
+      set({ transactions: txs })
+      saveTransactions(txs)
+      get().computeStats()
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
-  updateTransaction: (id, data) => {
-    void (async () => {
-      set({ isLoading: true })
-      try {
-        const updated = await updateTransactionApi(id, data)
-        const txs = get().transactions.map(tx =>
-          tx.id === id ? {
-            ...tx,
-            date: updated.date,
-            particulars: updated.particulars,
-            amount: updated.amount,
-            category: updated.category as Transaction['category'],
-            mode: updated.mode,
-            notes: updated.notes,
-            updatedAt: updated.updatedAt,
-          } : tx
-        )
-        set({ transactions: txs })
-        saveTransactions(txs)
-        get().computeStats()
-      } catch (err) {
-        console.error(err)
-      } finally {
-        set({ isLoading: false })
-      }
-    })()
+  remapCategory: async (fromCategory, toCategory) => {
+    set({ isLoading: true })
+    try {
+      await remapCategoryApi({ fromCategory, toCategory })
+
+      const txs = get().transactions.map(tx =>
+        tx.category === fromCategory ? { ...tx, category: toCategory } : tx,
+      )
+      set({ transactions: txs })
+      saveTransactions(txs)
+      get().computeStats()
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
-  removeTransaction: (id) => {
-    void (async () => {
-      set({ isLoading: true })
-      try {
-        await deleteTransactionApi(id)
-        const txs = get().transactions.filter(tx => tx.id !== id)
-        set({ transactions: txs })
-        saveTransactions(txs)
-        get().computeStats()
-      } catch (err) {
-        console.error(err)
-      } finally {
-        set({ isLoading: false })
-      }
-    })()
+  updateTransaction: async (id, data) => {
+    set({ isLoading: true })
+    try {
+      const updated = await updateTransactionApi(id, data)
+      const txs = get().transactions.map(tx =>
+        tx.id === id ? {
+          ...tx,
+          date: updated.date,
+          particulars: updated.particulars,
+          amount: updated.amount,
+          category: updated.category as Transaction['category'],
+          mode: updated.mode,
+          notes: updated.notes,
+          updatedAt: updated.updatedAt,
+        } : tx
+      )
+      set({ transactions: txs })
+      saveTransactions(txs)
+      get().computeStats()
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
-  updateSettings: (s) => {
-    void (async () => {
-      set({ isLoading: true })
-      try {
-        const updated = await updateSettingsApi(s)
-        const settings: Settings = {
-          stipend: updated.stipend,
-          extra: updated.extra,
-        }
-        set({ settings })
-        saveSettings(settings)
-        get().computeStats()
-      } catch (err) {
-        console.error(err)
-      } finally {
-        set({ isLoading: false })
+  removeTransaction: async (id) => {
+    set({ isLoading: true })
+    try {
+      await deleteTransactionApi(id)
+      const txs = get().transactions.filter(tx => tx.id !== id)
+      set({ transactions: txs })
+      saveTransactions(txs)
+      get().computeStats()
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  updateSettings: async (s) => {
+    set({ isLoading: true })
+    try {
+      const updated = await updateSettingsApi(s)
+      const settings: Settings = {
+        stipend: updated.stipend,
+        extra: updated.extra,
+        categoryConfig: updated.categoryConfig ?? [],
       }
-    })()
+      set({ settings })
+      saveSettings(settings)
+      get().computeStats()
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
   computeStats: () => {

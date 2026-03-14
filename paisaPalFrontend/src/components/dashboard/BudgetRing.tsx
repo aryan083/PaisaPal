@@ -2,6 +2,7 @@ import { useStore } from '@/store'
 import { motion } from 'framer-motion'
 import { formatCurrency } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
+import { PaymentModeSplit } from '@/components/dashboard/PaymentModeSplit'
 
 export function BudgetRing() {
   const { stats, settings, updateSettings } = useStore()
@@ -111,6 +112,10 @@ export function BudgetRing() {
               </button>
             </motion.div>
           )}
+
+          <div className="rounded-xl bg-secondary p-3">
+            <PaymentModeSplit stats={stats} variant="embed" />
+          </div>
         </div>
       </div>
     </div>

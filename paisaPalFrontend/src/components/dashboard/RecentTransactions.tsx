@@ -1,4 +1,4 @@
-import { formatCurrency, formatDateShort } from '@/lib/utils'
+import { formatCurrency, formatDateShortWithWeekday } from '@/lib/utils'
 import { CATEGORY_HEX, type Transaction } from '@/types'
 
 interface Props {
@@ -21,7 +21,7 @@ export function RecentTransactions({ transactions }: Props) {
               <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: CATEGORY_HEX[tx.category] }} />
               <div className="overflow-hidden">
                 <p className="text-xs text-foreground truncate">{tx.particulars}</p>
-                <p className="text-[10px] text-muted-foreground">{formatDateShort(tx.date)}</p>
+                <p className="text-[10px] text-muted-foreground">{formatDateShortWithWeekday(tx.date)}</p>
               </div>
             </div>
             <span className="text-xs font-semibold text-foreground ml-2">{formatCurrency(tx.amount)}</span>

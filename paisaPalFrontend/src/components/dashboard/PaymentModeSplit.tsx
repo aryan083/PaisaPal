@@ -3,17 +3,18 @@ import type { Stats } from '@/types'
 
 interface Props {
   stats: Stats | null
+  variant?: 'card' | 'embed'
 }
 
-export function PaymentModeSplit({ stats }: Props) {
+export function PaymentModeSplit({ stats, variant = 'card' }: Props) {
   const online = stats?.byMode.Online ?? 0
   const cash = stats?.byMode.Cash ?? 0
   const total = online + cash
   const onlinePct = total > 0 ? Math.round((online / total) * 100) : 0
   const cashPct = 100 - onlinePct
 
-  return (
-    <div className="card-base p-5">
+  const content = (
+    <>
       <h3 className="text-display text-sm font-semibold text-foreground mb-4">Payment Mode</h3>
       <div className="h-3 rounded-full bg-secondary overflow-hidden flex">
         {onlinePct > 0 && <div className="h-full bg-primary rounded-l-full transition-all" style={{ width: `${onlinePct}%` }} />}
@@ -31,6 +32,10 @@ export function PaymentModeSplit({ stats }: Props) {
           <span className="font-medium text-foreground">{formatCurrency(cash)}</span>
         </div>
       </div>
-    </div>
+    </>
   )
+
+  if (variant === 'embed') return content
+
+  return <div className="card-base p-5">{content}</div>
 }

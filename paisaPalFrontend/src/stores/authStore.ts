@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+type AuthErrorResponse = {
+  error?: string | null
+  suggestion?: string
+}
+
 export interface User {
   _id: string
   email: string
@@ -44,9 +49,10 @@ export const useAuthStore = create<AuthState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
           })
-          const data = await res.json()
+          const data = (await res.json()) as AuthErrorResponse & { data?: any }
           if (data.error) {
-            set({ error: data.error, isLoading: false })
+            const msg = data.suggestion ? `${data.error} ${data.suggestion}` : data.error
+            set({ error: msg, isLoading: false })
             return false
           }
           set({
@@ -71,9 +77,10 @@ export const useAuthStore = create<AuthState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, name }),
           })
-          const data = await res.json()
+          const data = (await res.json()) as AuthErrorResponse & { data?: any }
           if (data.error) {
-            set({ error: data.error, isLoading: false })
+            const msg = data.suggestion ? `${data.error} ${data.suggestion}` : data.error
+            set({ error: msg, isLoading: false })
             return false
           }
           set({

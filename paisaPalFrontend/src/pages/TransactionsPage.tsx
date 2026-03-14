@@ -2,17 +2,18 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { CATEGORIES, CATEGORY_HEX, type Category, type PaymentMode } from '@/types'
+import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode } from '@/types'
 import { Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { BulkImport } from '@/components/transactions/BulkImport'
 import { exportTransactionsCsv } from '@/lib/api'
 import { toast } from 'sonner'
+import { formatToastMessage, getUserError } from '@/lib/userError'
 
 type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
 
 export function TransactionsPage() {
-  const { transactions, removeTransaction, openForm, formOpen } = useStore()
+  const { settings, transactions, removeTransaction, openForm, formOpen } = useStore()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All')
   const [sort, setSort] = useState<SortKey>('date-desc')
@@ -71,6 +72,11 @@ export function TransactionsPage() {
     return result
   }, [transactions, search, categoryFilter, sort, modeFilter, startDate, endDate, minAmount, maxAmount, hasNotes])
 
+  const categories = useMemo(
+    () => getAvailableCategories(settings),
+    [settings],
+  )
+
   const handleExport = async () => {
     try {
       const csv = await exportTransactionsCsv({
@@ -92,7 +98,8 @@ export function TransactionsPage() {
       URL.revokeObjectURL(url)
       toast.success('Exported transactions to CSV')
     } catch (err) {
-      toast.error('Failed to export transactions')
+      const u = getUserError(err, 'Failed to export transactions')
+      toast.error(formatToastMessage(u))
       console.error(err)
     }
   }
@@ -110,13 +117,20 @@ export function TransactionsPage() {
 
   const hasActiveFilters = search || categoryFilter !== 'All' || modeFilter !== 'All' || startDate || endDate || minAmount || maxAmount || hasNotes !== 'All'
 
-  const handleDelete = (id: string) => {
-    if (deletingId === id) {
-      removeTransaction(id)
+  const handleDelete = async (id: string) => {
+    if (deletingId !== id) {
+      setDeletingId(id)
+      return
+    }
+
+    try {
+      await removeTransaction(id)
       setDeletingId(null)
       toast.success('Transaction deleted')
-    } else {
-      setDeletingId(id)
+    } catch (err) {
+      const u = getUserError(err, 'Failed to delete transaction')
+      toast.error(formatToastMessage(u))
+      console.error(err)
     }
   }
 
@@ -137,16 +151,23 @@ export function TransactionsPage() {
     }
   }
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (!bulkDeleteConfirm) {
       setBulkDeleteConfirm(true)
       return
     }
-    const count = selectedIds.size
-    selectedIds.forEach(id => removeTransaction(id))
-    setSelectedIds(new Set())
-    setBulkDeleteConfirm(false)
-    toast.success(`${count} transaction${count !== 1 ? 's' : ''} deleted`)
+    const ids = Array.from(selectedIds)
+    const count = ids.length
+    try {
+      await Promise.all(ids.map(id => removeTransaction(id)))
+      setSelectedIds(new Set())
+      setBulkDeleteConfirm(false)
+      toast.success(`${count} transaction${count !== 1 ? 's' : ''} deleted`)
+    } catch (err) {
+      const u = getUserError(err, 'Failed to delete selected transactions')
+      toast.error(formatToastMessage(u))
+      console.error(err)
+    }
   }
 
   const cancelBulkDelete = () => {
@@ -360,7 +381,7 @@ export function TransactionsPage() {
           className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground"
         >
           <option value="All">All Categories</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select
           value={sort}
@@ -415,9 +436,15 @@ export function TransactionsPage() {
                   <td className="px-4 py-3">
                     <span
                       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                      style={{ background: `${CATEGORY_HEX[tx.category]}18`, color: CATEGORY_HEX[tx.category] }}
+                      style={{
+                        background: `${getCategoryHex(tx.category, settings)}18`,
+                        color: getCategoryHex(tx.category, settings),
+                      }}
                     >
-                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: CATEGORY_HEX[tx.category] }} />
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: getCategoryHex(tx.category, settings) }}
+                      />
                       {tx.category}
                     </span>
                   </td>
@@ -472,9 +499,15 @@ export function TransactionsPage() {
                   </button>
                   <span
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{ background: `${CATEGORY_HEX[tx.category]}18`, color: CATEGORY_HEX[tx.category] }}
+                    style={{
+                      background: `${getCategoryHex(tx.category, settings)}18`,
+                      color: getCategoryHex(tx.category, settings),
+                    }}
                   >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: CATEGORY_HEX[tx.category] }} />
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: getCategoryHex(tx.category, settings) }}
+                    />
                     {tx.category}
                   </span>
                 </div>

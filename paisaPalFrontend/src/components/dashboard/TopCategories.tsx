@@ -1,13 +1,15 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { CATEGORY_HEX, type Category } from '@/types'
+import { getCategoryHex } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import type { Stats } from '@/types'
+import { useStore } from '@/store'
 
 interface Props {
   stats: Stats | null
 }
 
 export function TopCategories({ stats }: Props) {
+  const { settings } = useStore()
   const data = stats?.byCategory.slice(0, 5) ?? []
 
   return (
@@ -26,19 +28,30 @@ export function TopCategories({ stats }: Props) {
               width={90}
             />
             <Tooltip
-              formatter={(value: number) => [formatCurrency(value), 'Spent']}
-              labelFormatter={(label: string) => label}
-              contentStyle={{
-                background: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '12px',
-                fontSize: '12px',
-                color: 'hsl(var(--foreground))',
+              cursor={{ fill: 'hsl(var(--muted) / 0.35)' }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const p = payload[0]
+                const v = typeof p.value === 'number' ? p.value : Number(p.value)
+                const cat = typeof label === 'string' ? label : String(label)
+
+                return (
+                  <div
+                    className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs shadow-xl"
+                    style={{ color: 'hsl(var(--foreground))' }}
+                  >
+                    <div className="font-medium text-foreground">{cat}</div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Spent</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(v)}</span>
+                    </div>
+                  </div>
+                )
               }}
             />
             <Bar dataKey="total" radius={[0, 6, 6, 0]} barSize={16}>
               {data.map(entry => (
-                <Cell key={entry.category} fill={CATEGORY_HEX[entry.category as Category]} />
+                <Cell key={entry.category} fill={getCategoryHex(entry.category, settings)} />
               ))}
             </Bar>
           </BarChart>
@@ -48,7 +61,7 @@ export function TopCategories({ stats }: Props) {
         {data.map(c => (
           <div key={c.category} className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full" style={{ background: CATEGORY_HEX[c.category as Category] }} />
+              <div className="h-2 w-2 rounded-full" style={{ background: getCategoryHex(c.category, settings) }} />
               <span className="text-muted-foreground">{c.category}</span>
             </div>
             <span className="font-medium text-foreground">{formatCurrency(c.total)}</span>

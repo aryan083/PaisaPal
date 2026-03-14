@@ -32,17 +32,7 @@ const recurringRuleSchema = new Schema<IRecurringRule>(
     category: {
       type: String,
       required: true,
-      enum: [
-        'Rapido',
-        'Bus/GSRTC',
-        'Food & Drinks',
-        'Shopping',
-        'Social',
-        'Recharge/Bills',
-        'Self Care',
-        'Transfer/Sent',
-        'Other',
-      ],
+      maxlength: 50,
     },
     mode: {
       type: String,

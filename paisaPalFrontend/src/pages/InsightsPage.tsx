@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useStore } from '@/store'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDateWithWeekday } from '@/lib/utils'
 import {
   Bike, TrendingUp, Calendar, CreditCard, Trophy, Lightbulb,
   Activity, ShoppingBag, Flame, BarChart3, Star, Clock,
@@ -273,7 +273,7 @@ export function InsightsPage() {
           <InsightCard icon={Calendar} title="Peak Spend Day" color="#ff4f6a">
             {stats.biggestDay.date ? (
               <>
-                <p className="text-foreground font-semibold">{formatDate(stats.biggestDay.date)}</p>
+                <p className="text-foreground font-semibold">{formatDateWithWeekday(stats.biggestDay.date)}</p>
                 <p className="text-muted-foreground">Total: {formatCurrency(stats.biggestDay.total)}</p>
               </>
             ) : <p className="text-muted-foreground">No data</p>}
@@ -321,7 +321,7 @@ export function InsightsPage() {
             {stats.biggestTransaction ? (
               <>
                 <p className="text-foreground font-semibold">{stats.biggestTransaction.particulars}</p>
-                <p className="text-muted-foreground">{formatCurrency(stats.biggestTransaction.amount)} · {formatDate(stats.biggestTransaction.date)}</p>
+                <p className="text-muted-foreground">{formatCurrency(stats.biggestTransaction.amount)} · {formatDateWithWeekday(stats.biggestTransaction.date)}</p>
               </>
             ) : <p className="text-muted-foreground">No data</p>}
           </InsightCard>
@@ -373,7 +373,7 @@ export function InsightsPage() {
             {smallest && (
               <>
                 <p className="text-foreground font-semibold">{smallest.particulars}</p>
-                <p className="text-muted-foreground">{formatCurrency(smallest.amount)} · {formatDate(smallest.date)}</p>
+                <p className="text-muted-foreground">{formatCurrency(smallest.amount)} · {formatDateWithWeekday(smallest.date)}</p>
               </>
             )}
           </InsightCard>
@@ -464,7 +464,7 @@ export function InsightsPage() {
             {maxGap > 0 ? (
               <>
                 <p className="text-foreground font-semibold">{maxGap} day{maxGap !== 1 ? 's' : ''}</p>
-                <p className="text-muted-foreground">{formatDate(gapStart)} → {formatDate(gapEnd)}</p>
+                <p className="text-muted-foreground">{formatDateWithWeekday(gapStart)} → {formatDateWithWeekday(gapEnd)}</p>
               </>
             ) : (
               <p className="text-muted-foreground">No gaps yet — you're spending daily</p>
@@ -510,7 +510,7 @@ export function InsightsPage() {
           <InsightCard icon={Award} title="Best Value Day" color="#22d47a">
             {bestValueDay ? (
               <>
-                <p className="text-foreground font-semibold">{formatDate(bestValueDay.date)}</p>
+                <p className="text-foreground font-semibold">{formatDateWithWeekday(bestValueDay.date)}</p>
                 <p className="text-muted-foreground">{bestValueDay.count} txns · {formatCurrency(bestValueDay.total)} total</p>
                 <p className="text-xs text-muted-foreground mt-1">🏆 Most efficient day</p>
               </>

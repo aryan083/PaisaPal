@@ -30,17 +30,7 @@ const parseDDMMYYYY = (val: string | Date): Date => {
 
 const DDMMYYYYDateSchema = z.string().or(z.date()).transform((val) => parseDDMMYYYY(val));
 
-export const CategorySchema = z.enum([
-  'Rapido',
-  'Bus/GSRTC',
-  'Food & Drinks',
-  'Shopping',
-  'Social',
-  'Recharge/Bills',
-  'Self Care',
-  'Transfer/Sent',
-  'Other',
-]);
+export const CategorySchema = z.string().min(1).max(50);
 
 export type Category = z.infer<typeof CategorySchema>;
 
@@ -73,9 +63,34 @@ export const TransactionUpdateSchema = TransactionSchema.partial().superRefine(
 
 export type TransactionUpdateInput = z.infer<typeof TransactionUpdateSchema>;
 
+export const RemapCategorySchema = z.object({
+  fromCategory: CategorySchema,
+  toCategory: CategorySchema,
+}).superRefine((value, ctx) => {
+  if (value.fromCategory === value.toCategory) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'fromCategory and toCategory must be different',
+      path: ['toCategory'],
+    });
+  }
+});
+
+export type RemapCategoryInput = z.infer<typeof RemapCategorySchema>;
+
 export const SettingsSchema = z.object({
   stipend: z.number().min(0).optional(),
   extra: z.number().min(0).optional(),
+  categoryConfig: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(50),
+        color: z
+          .string()
+          .regex(/^#([0-9a-fA-F]{6})$/, 'Color must be a hex like #ff00aa'),
+      }),
+    )
+    .optional(),
 });
 
 export type SettingsInput = z.infer<typeof SettingsSchema>;

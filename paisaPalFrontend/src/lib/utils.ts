@@ -19,6 +19,20 @@ export function formatDateShort(dateStr: string): string {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
 }
 
+export function formatDateWithWeekday(dateStr: string): string {
+  const d = new Date(dateStr)
+  const day = d.toLocaleDateString('en-IN', { weekday: 'short' })
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return `${day}, ${date}`
+}
+
+export function formatDateShortWithWeekday(dateStr: string): string {
+  const d = new Date(dateStr)
+  const day = d.toLocaleDateString('en-IN', { weekday: 'short' })
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+  return `${day}, ${date}`
+}
+
 export function generateId(): string {
   return crypto.randomUUID()
 }

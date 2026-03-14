@@ -1,5 +1,5 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { formatCurrency, formatDateShort } from '@/lib/utils'
+import { formatCurrency, formatDateShort, formatDateShortWithWeekday } from '@/lib/utils'
 import type { Stats } from '@/types'
 
 interface Props {
@@ -37,13 +37,27 @@ export function CumulativeSpend({ stats, budget }: Props) {
             />
             <Tooltip
               formatter={(value: number) => [formatCurrency(value), 'Total Spent']}
-              labelFormatter={formatDateShort}
-              contentStyle={{
-                background: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '12px',
-                fontSize: '12px',
-                color: 'hsl(var(--foreground))',
+              labelFormatter={formatDateShortWithWeekday}
+              cursor={{ stroke: 'hsl(var(--border))' }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const v = typeof payload[0].value === 'number'
+                  ? payload[0].value
+                  : Number(payload[0].value)
+                const l = typeof label === 'string' ? label : String(label)
+
+                return (
+                  <div
+                    className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs shadow-xl"
+                    style={{ color: 'hsl(var(--foreground))' }}
+                  >
+                    <div className="font-medium text-foreground">{formatDateShortWithWeekday(l)}</div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Total spent</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(v)}</span>
+                    </div>
+                  </div>
+                )
               }}
             />
             {budget > 0 && (

@@ -35,6 +35,9 @@ export async function getBudget(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Budget not found',
+      errorCode: 'BUDGET_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -61,6 +64,9 @@ export async function createBudget(req: Request, res: Response) {
     return res.status(409).json({
       data: null,
       error: 'Budget already exists for this category and month',
+      errorCode: 'BUDGET_EXISTS',
+      suggestion: 'Edit the existing budget instead, or change category/month.',
+      requestId: req.requestId,
     });
   }
 
@@ -100,6 +106,9 @@ export async function updateBudget(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Budget not found',
+      errorCode: 'BUDGET_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -130,6 +139,9 @@ export async function deleteBudget(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Budget not found',
+      errorCode: 'BUDGET_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -159,6 +171,9 @@ export async function getBudgetStats(req: Request, res: Response) {
     return res.status(400).json({
       data: null,
       error: 'Month parameter is required in YYYY-MM format',
+      errorCode: 'INVALID_MONTH',
+      suggestion: 'Please pick a month like 2026-03 and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -201,9 +216,9 @@ export async function getBudgetStats(req: Request, res: Response) {
   // Add categories that have spending but no budget
   const budgetedCategories = new Set(budgets.map((b) => b.category));
   for (const [category, spent] of Object.entries(spendingByCategory)) {
-    if (!budgetedCategories.has(category as Category)) {
+    if (!budgetedCategories.has(category)) {
       budgetStats.push({
-        category: category as Category,
+        category,
         monthlyLimit: 0,
         spent,
         remaining: -spent,

@@ -2,14 +2,17 @@ import { useStore } from '@/store'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { TransactionSchema, type TransactionInput } from '@/lib/schemas'
-import { CATEGORIES, CATEGORY_HEX } from '@/types'
+import { getAvailableCategories } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import { useEffect } from 'react'
+import { formatToastMessage, getUserError } from '@/lib/userError'
 
 export function TransactionForm() {
-  const { formOpen, closeForm, editingTransaction, addTransaction, updateTransaction } = useStore()
+  const { settings, formOpen, closeForm, editingTransaction, addTransaction, updateTransaction } = useStore()
   const isEditing = !!editingTransaction
+
+  const categories = getAvailableCategories(settings)
 
   const form = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema),
@@ -45,23 +48,29 @@ export function TransactionForm() {
     }
   }, [editingTransaction, formOpen, form])
 
-  const onSubmit = (data: TransactionInput) => {
-    if (isEditing && editingTransaction) {
-      updateTransaction(editingTransaction.id, data)
-      toast.success('Transaction updated')
-    } else {
-      addTransaction({
-        date: data.date,
-        particulars: data.particulars,
-        amount: data.amount,
-        category: data.category,
-        mode: data.mode,
-        notes: data.notes ?? '',
-      })
-      toast.success('Transaction added')
+  const onSubmit = async (data: TransactionInput) => {
+    try {
+      if (isEditing && editingTransaction) {
+        await updateTransaction(editingTransaction.id, data)
+        toast.success('Transaction updated')
+      } else {
+        await addTransaction({
+          date: data.date,
+          particulars: data.particulars,
+          amount: data.amount,
+          category: data.category,
+          mode: data.mode,
+          notes: data.notes ?? '',
+        })
+        toast.success('Transaction added')
+      }
+      closeForm()
+      form.reset()
+    } catch (err) {
+      const u = getUserError(err, 'Failed to save transaction')
+      toast.error(formatToastMessage(u))
+      console.error(err)
     }
-    closeForm()
-    form.reset()
   }
 
   return (
@@ -122,7 +131,7 @@ export function TransactionForm() {
               {...form.register('category')}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
-              {CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

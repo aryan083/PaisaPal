@@ -7,12 +7,18 @@ import {
   getTransaction,
   importTransactionsCsv,
   listTransactions,
+  remapCategory,
   updateTransaction,
 } from '../controllers/transactions';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validate } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
-import { QueryParamsSchema, TransactionSchema, TransactionUpdateSchema } from '../schemas';
+import {
+  QueryParamsSchema,
+  RemapCategorySchema,
+  TransactionSchema,
+  TransactionUpdateSchema,
+} from '../schemas';
 
 const router = Router();
 
@@ -31,6 +37,7 @@ router.post(
   upload.single('file'),
   asyncHandler(importTransactionsCsv),
 );
+router.put('/remap-category', validate(RemapCategorySchema, 'body'), asyncHandler(remapCategory));
 router.get('/:id', asyncHandler(getTransaction));
 router.put('/:id', validate(TransactionUpdateSchema, 'body'), asyncHandler(updateTransaction));
 router.delete('/:id', asyncHandler(deleteTransaction));

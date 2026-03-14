@@ -1,7 +1,14 @@
 import type { Request, Response } from 'express';
 import { connectDB } from '../lib/mongodb';
 import Transaction from '../models/Transaction';
-import type { QueryParams, TransactionInput, TransactionUpdateInput } from '../schemas';
+import Budget from '../models/Budget';
+import RecurringRule from '../models/RecurringRule';
+import type {
+  QueryParams,
+  RemapCategoryInput,
+  TransactionInput,
+  TransactionUpdateInput,
+} from '../schemas';
 import { importTransactionsFromCsv } from '../services/transactions.service';
 import { createAuditLog } from '../lib/audit';
 
@@ -112,6 +119,9 @@ export async function getTransaction(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Transaction not found',
+      errorCode: 'TX_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -132,6 +142,9 @@ export async function updateTransaction(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Transaction not found',
+      errorCode: 'TX_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -145,6 +158,9 @@ export async function updateTransaction(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Transaction not found',
+      errorCode: 'TX_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -175,6 +191,9 @@ export async function deleteTransaction(req: Request, res: Response) {
     return res.status(404).json({
       data: null,
       error: 'Transaction not found',
+      errorCode: 'TX_NOT_FOUND',
+      suggestion: 'Please refresh and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -202,6 +221,9 @@ export async function importTransactionsCsv(req: Request, res: Response) {
     return res.status(400).json({
       data: null,
       error: 'CSV file is required',
+      errorCode: 'CSV_FILE_REQUIRED',
+      suggestion: 'Please choose a CSV file and try again.',
+      requestId: req.requestId,
     });
   }
 
@@ -299,4 +321,50 @@ export async function exportTransactionsCsv(req: Request, res: Response) {
   res.setHeader('Content-Disposition', `attachment; filename="transactions-${new Date().toISOString().split('T')[0]}.csv"`);
 
   return res.status(200).send(csv);
+}
+
+export async function remapCategory(req: Request, res: Response) {
+  await connectDB();
+
+  const body = req.body as RemapCategoryInput;
+  const userId = req.user!.userId;
+
+  const [txRes, budgetRes, recurringRes] = await Promise.all([
+    Transaction.updateMany(
+      { userId, category: body.fromCategory },
+      { $set: { category: body.toCategory } },
+    ),
+    Budget.updateMany(
+      { userId, category: body.fromCategory },
+      { $set: { category: body.toCategory } },
+    ),
+    RecurringRule.updateMany(
+      { userId, category: body.fromCategory },
+      { $set: { category: body.toCategory } },
+    ),
+  ]);
+
+  createAuditLog({
+    userId,
+    action: 'UPDATE',
+    resource: 'category',
+    resourceId: userId,
+    after: {
+      fromCategory: body.fromCategory,
+      toCategory: body.toCategory,
+      transactionsModified: txRes.modifiedCount,
+      budgetsModified: budgetRes.modifiedCount,
+      recurringRulesModified: recurringRes.modifiedCount,
+    },
+    req,
+  });
+
+  return res.status(200).json({
+    data: {
+      transactionsModified: txRes.modifiedCount,
+      budgetsModified: budgetRes.modifiedCount,
+      recurringRulesModified: recurringRes.modifiedCount,
+    },
+    error: null,
+  });
 }

@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDateWithWeekday } from '@/lib/utils'
 import type { Stats } from '@/types'
 
 interface Props {
@@ -12,7 +12,7 @@ export function QuickStats({ stats }: Props) {
     { label: 'Transactions', value: String(stats.transactionCount) },
     { label: 'Active Days', value: String(stats.activeDays) },
     { label: 'Daily Avg', value: formatCurrency(stats.dailyAverage) },
-    { label: 'Peak Day', value: stats.biggestDay.date ? formatDate(stats.biggestDay.date) : '—' },
+    { label: 'Peak Day', value: stats.biggestDay.date ? formatDateWithWeekday(stats.biggestDay.date) : '—' },
   ]
 
   return (

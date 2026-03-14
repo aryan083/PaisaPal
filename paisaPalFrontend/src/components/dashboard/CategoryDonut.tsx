@@ -1,13 +1,15 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { CATEGORY_HEX, type Category } from '@/types'
+import { getCategoryHex } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import type { Stats } from '@/types'
+import { useStore } from '@/store'
 
 interface Props {
   stats: Stats | null
 }
 
 export function CategoryDonut({ stats }: Props) {
+  const { settings } = useStore()
   const data = stats?.byCategory.filter(c => c.total > 0) ?? []
 
   return (
@@ -29,17 +31,28 @@ export function CategoryDonut({ stats }: Props) {
                 stroke="hsl(var(--card))"
               >
                 {data.map(entry => (
-                  <Cell key={entry.category} fill={CATEGORY_HEX[entry.category as Category]} />
+                  <Cell key={entry.category} fill={getCategoryHex(entry.category, settings)} />
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
-                contentStyle={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  color: 'hsl(var(--foreground))',
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const p = payload[0]
+                  const v = typeof p.value === 'number' ? p.value : Number(p.value)
+                  const l = typeof label === 'string' ? label : String(label)
+
+                  return (
+                    <div
+                      className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs shadow-xl"
+                      style={{ color: 'hsl(var(--foreground))' }}
+                    >
+                      <div className="font-medium text-foreground">{l}</div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">Spent</span>
+                        <span className="font-semibold text-foreground">{formatCurrency(v)}</span>
+                      </div>
+                    </div>
+                  )
                 }}
               />
             </PieChart>
@@ -48,7 +61,10 @@ export function CategoryDonut({ stats }: Props) {
         <div className="flex flex-col gap-1.5 overflow-hidden">
           {data.slice(0, 5).map(c => (
             <div key={c.category} className="flex items-center gap-2 text-xs">
-              <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: CATEGORY_HEX[c.category as Category] }} />
+              <div
+                className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                style={{ background: getCategoryHex(c.category, settings) }}
+              />
               <span className="text-muted-foreground truncate">{c.category}</span>
               <span className="ml-auto font-medium text-foreground">{formatCurrency(c.total)}</span>
             </div>
