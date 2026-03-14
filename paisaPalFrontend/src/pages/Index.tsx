@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useStore } from '@/store'
 import { useAuthStore } from '@/stores/authStore'
 import { AppShell } from '@/components/layout/AppShell'
+import { decodeSnapshot } from '@/lib/utils'
+import { toast } from 'sonner'
 import { DashboardPage } from './DashboardPage'
 import { TransactionsPage } from './TransactionsPage'
 import { RecurringPage } from './RecurringPage'
@@ -11,7 +13,7 @@ import { SettingsPage } from './SettingsPage'
 import { AuthPage } from './AuthPage'
 
 const Index = () => {
-  const { activeTab, theme, init } = useStore()
+  const { activeTab, theme, init, applySnapshot } = useStore()
   const { isAuthenticated, checkAuth, token, hasHydrated, isLoading } = useAuthStore()
 
   useEffect(() => {
@@ -25,13 +27,47 @@ const Index = () => {
   }, [isAuthenticated, init])
 
   useEffect(() => {
+    if (!isAuthenticated) return
+    const params = new URLSearchParams(window.location.search)
+    const encoded = params.get('snapshot')
+    if (!encoded) return
+
+    try {
+      const parsed = decodeSnapshot(encoded) as {
+        transactions?: unknown
+        settings?: unknown
+      }
+      if (!parsed || !Array.isArray(parsed.transactions) || !parsed.settings) {
+        throw new Error('Invalid snapshot payload')
+      }
+
+      void applySnapshot({
+        transactions: parsed.transactions as any,
+        settings: parsed.settings as any,
+      }).then(() => {
+        params.delete('snapshot')
+        const next = params.toString()
+        const url = `${window.location.pathname}${next ? `?${next}` : ''}`
+        window.history.replaceState({}, '', url)
+        toast.success('Snapshot restored')
+      })
+    } catch {
+      toast.error('Failed to restore snapshot')
+    }
+  }, [isAuthenticated, applySnapshot])
+
+  useEffect(() => {
     if (token) {
       checkAuth()
     }
   }, [token, checkAuth])
 
   if (!hasHydrated || (token && isLoading)) {
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {

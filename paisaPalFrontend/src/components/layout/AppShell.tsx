@@ -16,10 +16,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <div className="flex flex-1 flex-col min-w-0 lg:ml-60">
-        {/* Mobile Header */}
-        <div className="lg:hidden">
-          <Header />
-        </div>
+        <Header />
 
         {/* Main Content */}
         <main className="flex-1 overflow-x-hidden">

@@ -71,3 +71,30 @@ export function formatDateShortWithWeekday(dateStr: string): string {
 export function generateId(): string {
   return crypto.randomUUID()
 }
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i])
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function fromBase64Url(s: string): Uint8Array {
+  const base = s.replace(/-/g, '+').replace(/_/g, '/')
+  const pad = base.length % 4 === 0 ? base : base + '='.repeat(4 - (base.length % 4))
+  const bin = atob(pad)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+export function encodeSnapshot(payload: unknown): string {
+  const json = JSON.stringify(payload)
+  const bytes = new TextEncoder().encode(json)
+  return toBase64Url(bytes)
+}
+
+export function decodeSnapshot(encoded: string): unknown {
+  const bytes = fromBase64Url(encoded)
+  const json = new TextDecoder().decode(bytes)
+  return JSON.parse(json) as unknown
+}

@@ -29,6 +29,7 @@ interface AppStore {
   isLoading: boolean
 
   init: () => void
+  applySnapshot: (data: { transactions: Transaction[]; settings: Settings }) => Promise<void>
   setActiveTab: (tab: TabId) => void
   setTheme: (t: 'dark' | 'light') => void
   openForm: (tx?: Transaction) => void
@@ -69,6 +70,7 @@ export const useStore = create<AppStore>((set, get) => ({
       if (cachedTxs.length > 0) {
         set({ transactions: cachedTxs, settings: cachedSettings })
         get().computeStats()
+        set({ isLoading: false })
       }
 
       const online = useSyncStore.getState().isOnline
@@ -110,9 +112,23 @@ export const useStore = create<AppStore>((set, get) => ({
         console.error(err)
         // keep cached
       } finally {
-        set({ isLoading: false })
+        set((s) => (s.isLoading ? { isLoading: false } : s))
       }
     })()
+  },
+
+  applySnapshot: async (data) => {
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const txs = data.transactions
+    const settings = data.settings
+
+    set({ transactions: txs, settings })
+    await Promise.all([
+      saveTransactions(txs, namespace),
+      saveSettings(settings, namespace),
+    ])
+    get().computeStats()
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -447,7 +463,7 @@ export const useStore = create<AppStore>((set, get) => ({
       .map(([date, total]) => ({ date, total }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    const byMode = { Online: 0, Cash: 0 }
+    const byMode = { Online: 0, Cash: 0,Card:0 }
     transactions.forEach(t => { byMode[t.mode] += t.amount })
 
     const activeDays = dateMap.size

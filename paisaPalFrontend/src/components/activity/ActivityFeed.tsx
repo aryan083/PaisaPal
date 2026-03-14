@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Activity, Plus, Edit, Trash2, RefreshCw, Settings, Wallet, Receipt, X } from 'lucide-react'
 import { fetchAuditLogs, type ApiAuditLog } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface ActivityFeedProps {
   isOpen: boolean
@@ -59,6 +60,7 @@ export function ActivityFeed({ isOpen, onClose }: ActivityFeedProps) {
       setLogs(data)
     } catch (err) {
       console.error('Failed to load audit logs:', err)
+      toast.error('Failed to load activity feed')
     } finally {
       setLoading(false)
     }
@@ -80,7 +82,7 @@ export function ActivityFeed({ isOpen, onClose }: ActivityFeedProps) {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 20 }}
-            className="fixed right-0 top-0 h-full w-96 bg-card border-l border-border z-50 shadow-xl"
+            className="fixed right-0 top-0 h-full w-full sm:w-96 bg-card border-l border-border z-50 shadow-xl"
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">

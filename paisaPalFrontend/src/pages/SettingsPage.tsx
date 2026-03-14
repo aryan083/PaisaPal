@@ -3,7 +3,7 @@ import { useStore } from '@/store'
 import { useState } from 'react'
 import { Sun, Moon, Download, Copy } from 'lucide-react'
 import { DEFAULT_CATEGORIES, getAvailableCategories, getCategoryHex } from '@/types'
-import { formatCurrency } from '@/lib/utils'
+import { encodeSnapshot, formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import {
@@ -57,10 +57,24 @@ export function SettingsPage() {
 
   const shareSnapshot = () => {
     const data = { transactions, settings }
-    const encoded = btoa(JSON.stringify(data))
-    const url = `${window.location.origin}?snapshot=${encoded}`
-    navigator.clipboard.writeText(url)
-    toast.success('Snapshot URL copied to clipboard')
+    const encoded = encodeSnapshot(data)
+    const url = `${window.location.origin}${window.location.pathname}?snapshot=${encoded}`
+    Promise.resolve()
+      .then(() => navigator.clipboard.writeText(url))
+      .then(() => toast.success('Snapshot URL copied to clipboard'))
+      .catch(() => {
+        try {
+          const el = document.createElement('textarea')
+          el.value = url
+          document.body.appendChild(el)
+          el.select()
+          document.execCommand('copy')
+          document.body.removeChild(el)
+          toast.success('Snapshot URL copied to clipboard')
+        } catch {
+          toast.error('Failed to copy snapshot URL')
+        }
+      })
   }
 
   // Get per-category totals for reference grid
