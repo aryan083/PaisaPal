@@ -40,8 +40,9 @@ export function WeeklySpendingHeatmap({ transactions, dayFilter }: Props) {
     .map(() => new Array(7).fill(null).map(() => [] as Transaction[]))
 
   transactions.forEach(t => {
-    const w = getWeekOfMonth(t.date)
-    const dow = (parseLocalDate(t.date).getDay() + 6) % 7 // Mon=0..Sun=6
+    const key = t.dateKey || t.date
+    const w = getWeekOfMonth(key)
+    const dow = (parseLocalDate(key).getDay() + 6) % 7 // Mon=0..Sun=6
     total[w - 1][dow] += t.amount
     count[w - 1][dow] += 1
     txns[w - 1][dow].push(t)

@@ -35,7 +35,7 @@ export function SpendingCalendar({ transactions, selectedMonth }: Props) {
   const txByDate = useMemo(() => {
     const map = new Map<string, Transaction[]>()
     transactions.forEach(t => {
-      const d = toLocalDateKey(t.date)
+      const d = t.dateKey || toLocalDateKey(t.date)
       map.set(d, [...(map.get(d) ?? []), t])
     })
     return map

@@ -21,7 +21,7 @@ export function SpendingHeatmap({ transactions, dayFilter = 'all' }: Props) {
   const countByDay = new Array(7).fill(0)
   const txnsByDay: Transaction[][] = new Array(7).fill(null).map(() => [])
   transactions.forEach(t => {
-    const day = parseLocalDate(t.date).getDay()
+    const day = parseLocalDate(t.dateKey || t.date).getDay()
     byDay[day] += t.amount
     countByDay[day]++
     txnsByDay[day].push(t)

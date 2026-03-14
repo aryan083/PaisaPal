@@ -56,7 +56,7 @@ export function InsightsPage() {
   const onlinePct = stats.byMode.Online + stats.byMode.Cash > 0
     ? Math.round((stats.byMode.Online / (stats.byMode.Online + stats.byMode.Cash)) * 100) : 0
 
-  const dates = transactions.map(t => toLocalDateKey(t.date)).sort()
+  const dates = transactions.map(t => t.dateKey || toLocalDateKey(t.date)).sort()
   const uniqueDates = [...new Set(dates)]
   let streak = 1
   for (let i = uniqueDates.length - 1; i > 0; i--) {
@@ -73,7 +73,7 @@ export function InsightsPage() {
 
   let weekdaySpend = 0, weekendSpend = 0, weekdayCount = 0, weekendCount = 0
   transactions.forEach(t => {
-    const day = parseLocalDate(t.date).getDay()
+    const day = parseLocalDate(t.dateKey || t.date).getDay()
     if (day === 0 || day === 6) { weekendSpend += t.amount; weekendCount++ }
     else { weekdaySpend += t.amount; weekdayCount++ }
   })
@@ -208,7 +208,7 @@ export function InsightsPage() {
   // 10. Best Value Day
   const dayStats: { date: string; count: number; total: number }[] = []
   uniqueDates.forEach(date => {
-    const dayTxns = transactions.filter(t => toLocalDateKey(t.date) === date)
+    const dayTxns = transactions.filter(t => (t.dateKey || toLocalDateKey(t.date)) === date)
     dayStats.push({
       date,
       count: dayTxns.length,
@@ -221,7 +221,7 @@ export function InsightsPage() {
   
   // 11. Monthly Projection Confidence
   const dailySpends = uniqueDates.map(d => 
-    transactions.filter(t => toLocalDateKey(t.date) === d).reduce((s, t) => s + t.amount, 0)
+    transactions.filter(t => (t.dateKey || toLocalDateKey(t.date)) === d).reduce((s, t) => s + t.amount, 0)
   )
   const avgDailySpend = dailySpends.length > 0 ? dailySpends.reduce((s, d) => s + d, 0) / dailySpends.length : 0
   const variance = dailySpends.length > 1 

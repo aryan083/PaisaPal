@@ -7,6 +7,10 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/asyncHandler'
 import { createAuditLog } from '../lib/audit'
 
+function toIstDateKey(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+}
+
 const router = Router()
 
 router.use(requireAuth)
@@ -91,9 +95,22 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
       } else {
         switch (op.operation) {
           case 'create':
-            const created = await Transaction.create({
+            const createPayload: Record<string, unknown> = {
               ...op.data,
               userId,
+            }
+
+            if (op.data?.date) {
+              const dt = op.data.date instanceof Date
+                ? op.data.date
+                : new Date(String(op.data.date))
+              if (!Number.isNaN(dt.getTime())) {
+                createPayload.dateKey = toIstDateKey(dt)
+              }
+            }
+
+            const created = await Transaction.create({
+              ...createPayload,
             })
             resourceId = created._id.toString()
             response = { resourceId, data: created.toObject() }
@@ -109,9 +126,22 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
             break
 
           case 'update':
+            const updatePayload: Record<string, unknown> = {
+              ...op.data,
+            }
+
+            if (op.data?.date) {
+              const dt = op.data.date instanceof Date
+                ? op.data.date
+                : new Date(String(op.data.date))
+              if (!Number.isNaN(dt.getTime())) {
+                updatePayload.dateKey = toIstDateKey(dt)
+              }
+            }
+
             const updated = await Transaction.findOneAndUpdate(
               { _id: op.data._id, userId },
-              op.data,
+              updatePayload,
               { new: true, runValidators: true }
             ).lean()
 

@@ -86,6 +86,7 @@ export const useStore = create<AppStore>((set, get) => ({
         const transactions: Transaction[] = apiTransactions.map(tx => ({
           id: tx._id,
           date: tx.date,
+          dateKey: tx.dateKey,
           particulars: tx.particulars,
           amount: tx.amount,
           category: tx.category as Transaction['category'],
@@ -137,6 +138,7 @@ export const useStore = create<AppStore>((set, get) => ({
         const tx: Transaction = {
           id: created._id,
           date: created.date,
+          dateKey: created.dateKey,
           particulars: created.particulars,
           amount: created.amount,
           category: created.category as Transaction['category'],
@@ -156,6 +158,7 @@ export const useStore = create<AppStore>((set, get) => ({
       const localTx: Transaction = {
         id: crypto.randomUUID(),
         date: data.date,
+        dateKey: data.date,
         particulars: data.particulars,
         amount: data.amount,
         category: data.category,
@@ -225,6 +228,7 @@ export const useStore = create<AppStore>((set, get) => ({
         const newTxs: Transaction[] = created.map((c) => ({
           id: c._id,
           date: c.date,
+          dateKey: c.dateKey,
           particulars: c.particulars,
           amount: c.amount,
           category: c.category as Transaction['category'],
@@ -242,9 +246,10 @@ export const useStore = create<AppStore>((set, get) => ({
       }
 
       const now = new Date().toISOString()
-      const localTxs: Transaction[] = items.map((i) => ({
+      const newTxs: Transaction[] = items.map((i) => ({
         id: crypto.randomUUID(),
         date: i.date,
+        dateKey: i.date,
         particulars: i.particulars,
         amount: i.amount,
         category: i.category,
@@ -254,13 +259,13 @@ export const useStore = create<AppStore>((set, get) => ({
         updatedAt: now,
       }))
 
-      const txs = [...localTxs, ...get().transactions]
+      const txs = [...newTxs, ...get().transactions]
       set({ transactions: txs })
       await saveTransactions(txs, namespace)
       get().computeStats()
 
-      for (let idx = 0; idx < localTxs.length; idx += 1) {
-        const localTx = localTxs[idx]
+      for (let idx = 0; idx < newTxs.length; idx += 1) {
+        const localTx = newTxs[idx]
         const item = items[idx]
         if (!localTx || !item) continue
         useSyncStore.getState().addToQueue({
@@ -316,17 +321,20 @@ export const useStore = create<AppStore>((set, get) => ({
     try {
       if (online) {
         const updated = await updateTransactionApi(id, data)
-        const txs = get().transactions.map(tx =>
-          tx.id === id ? {
-            ...tx,
-            date: updated.date,
-            particulars: updated.particulars,
-            amount: updated.amount,
-            category: updated.category as Transaction['category'],
-            mode: updated.mode,
-            notes: updated.notes,
-            updatedAt: updated.updatedAt,
-          } : tx
+        const txs = get().transactions.map((tx) =>
+          tx.id === id
+            ? {
+                ...tx,
+                date: updated.date,
+                dateKey: updated.dateKey,
+                particulars: updated.particulars,
+                amount: updated.amount,
+                category: updated.category as Transaction['category'],
+                mode: updated.mode,
+                notes: updated.notes,
+                updatedAt: updated.updatedAt,
+              }
+            : tx,
         )
         set({ transactions: txs })
         await saveTransactions(txs, namespace)
@@ -432,7 +440,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
     const dateMap = new Map<string, number>()
     transactions.forEach(t => {
-      const d = toLocalDateKey(t.date)
+      const d = t.dateKey || toLocalDateKey(t.date)
       dateMap.set(d, (dateMap.get(d) || 0) + t.amount)
     })
     const byDate = Array.from(dateMap.entries())

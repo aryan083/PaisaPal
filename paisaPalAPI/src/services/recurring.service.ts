@@ -1,6 +1,10 @@
 import type { IRecurringRule } from '../models/RecurringRule';
 import Transaction from '../models/Transaction';
 
+function toIstDateKey(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 export function calculateNextDueDate(rule: IRecurringRule, fromDate: Date = new Date()): Date {
   const next = new Date(fromDate);
 
@@ -116,7 +120,10 @@ export async function materializeRecurringTransactions(
     });
 
     if (!dryRun) {
-      await Transaction.create(transactionData);
+      await Transaction.create({
+        ...transactionData,
+        dateKey: toIstDateKey(rule.nextDue),
+      });
 
       const nextDue = calculateNextDueDate(rule, rule.nextDue);
 

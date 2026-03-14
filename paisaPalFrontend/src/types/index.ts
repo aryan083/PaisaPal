@@ -24,6 +24,7 @@ export interface CategoryConfigEntry {
 export interface Transaction {
   id: string
   date: string
+  dateKey: string
   particulars: string
   amount: number
   category: Category

@@ -45,10 +45,10 @@ export function TransactionsPage() {
       result = result.filter(t => t.mode === modeFilter)
     }
     if (startDate) {
-      result = result.filter(t => t.date >= startDate)
+      result = result.filter(t => (t.dateKey || t.date) >= startDate)
     }
     if (endDate) {
-      result = result.filter(t => t.date <= endDate)
+      result = result.filter(t => (t.dateKey || t.date) <= endDate)
     }
     if (minAmount) {
       result = result.filter(t => t.amount >= parseFloat(minAmount))
@@ -432,8 +432,8 @@ export function TransactionsPage() {
                       {selectedIds.has(tx.id) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{getWeekdayShort(tx.date)}</td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(tx.dateKey || tx.date)}</td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{getWeekdayShort(tx.dateKey || tx.date)}</td>
                   <td className="px-4 py-3 text-foreground max-w-[200px] truncate">{tx.particulars}</td>
                   <td className="px-4 py-3">
                     <span
@@ -518,7 +518,7 @@ export function TransactionsPage() {
               <p className="text-sm text-foreground mb-1">{tx.particulars}</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{formatDate(tx.date)} · {getWeekdayShort(tx.date)}</span>
+                  <span>{formatDate(tx.dateKey || tx.date)} · {getWeekdayShort(tx.dateKey || tx.date)}</span>
                   <span className="rounded-full bg-secondary px-1.5 py-0.5">{tx.mode}</span>
                 </div>
                 <div className="flex items-center gap-1">

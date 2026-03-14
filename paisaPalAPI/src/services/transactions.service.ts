@@ -3,6 +3,10 @@ import { parse } from 'csv-parse/sync';
 import Transaction from '../models/Transaction';
 import { TransactionSchema } from '../schemas';
 
+function toIstDateKey(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 type ImportError = {
   row: number;
   error: string;
@@ -26,6 +30,7 @@ export type ImportCsvResult = {
     row: number;
     data: {
       date: Date;
+      dateKey: string;
       particulars: string;
       amount: number;
       category: string;
@@ -116,22 +121,14 @@ function validateRow(rowNumber: number, record: RawRecord) {
 }
 
 async function checkDuplicates(
-  transactions: Array<{ date: Date; particulars: string; amount: number }>,
+  transactions: Array<{ date: Date; dateKey: string; particulars: string; amount: number }>,
   userId?: string,
 ): Promise<Set<number>> {
   const duplicateIndices = new Set<number>();
 
   const checks = transactions.map(async (tx, index) => {
-    const start = new Date(tx.date);
-    start.setUTCHours(0, 0, 0, 0);
-    const end = new Date(tx.date);
-    end.setUTCHours(23, 59, 59, 999);
-
     const filter: Record<string, unknown> = {
-      date: {
-        $gte: start,
-        $lt: end,
-      },
+      dateKey: tx.dateKey,
       particulars: tx.particulars,
       amount: tx.amount,
     };
@@ -183,6 +180,7 @@ export async function importTransactionsFromCsv(
     row: number;
     data: {
       date: Date;
+      dateKey: string;
       particulars: string;
       amount: number;
       category: string;
@@ -198,7 +196,13 @@ export async function importTransactionsFromCsv(
       errors.push(result.error);
       continue;
     }
-    valid.push({ row: rowNumber, data: result.data });
+    valid.push({
+      row: rowNumber,
+      data: {
+        ...result.data,
+        dateKey: toIstDateKey(result.data.date),
+      },
+    });
   }
 
   const duplicateDetails: DuplicateInfo[] = [];

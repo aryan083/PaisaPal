@@ -63,6 +63,7 @@ async function requestJson<T>(
 export type ApiTransaction = {
   _id: string;
   date: string;
+  dateKey: string;
   particulars: string;
   amount: number;
   category: string;

@@ -13,11 +13,32 @@ import type {
 import { importTransactionsFromCsv } from '../services/transactions.service';
 import { createAuditLog } from '../lib/audit';
 
+function toIstDateKey(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 export async function listTransactions(req: Request, res: Response) {
   await connectDB();
 
   const query = req.query as unknown as QueryParams;
   const userId = req.user!.userId;
+
+  await Transaction.updateMany(
+    { userId, dateKey: { $exists: false } },
+    [
+      {
+        $set: {
+          dateKey: {
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$date',
+              timezone: 'Asia/Kolkata',
+            },
+          },
+        },
+      },
+    ],
+  );
 
   const filter: Record<string, unknown> = { userId };
   if (query.search) {
@@ -36,12 +57,12 @@ export async function listTransactions(req: Request, res: Response) {
   }
 
   if (query.startDate || query.endDate) {
-    filter.date = {};
+    filter.dateKey = {};
     if (query.startDate) {
-      (filter.date as Record<string, Date>).$gte = query.startDate;
+      (filter.dateKey as Record<string, string>).$gte = toIstDateKey(query.startDate);
     }
     if (query.endDate) {
-      (filter.date as Record<string, Date>).$lte = query.endDate;
+      (filter.dateKey as Record<string, string>).$lte = toIstDateKey(query.endDate);
     }
   }
 
@@ -92,7 +113,11 @@ export async function createTransaction(req: Request, res: Response) {
   const body = req.body as TransactionInput;
   const userId = req.user!.userId;
 
-  const created = await Transaction.create({ ...body, userId });
+  const created = await Transaction.create({
+    ...body,
+    dateKey: toIstDateKey(body.date),
+    userId,
+  });
 
   createAuditLog({
     userId,
@@ -138,6 +163,11 @@ export async function updateTransaction(req: Request, res: Response) {
   const body = req.body as TransactionUpdateInput;
   const userId = req.user!.userId;
 
+  const updatePayload: Record<string, unknown> = { ...body };
+  if (body.date instanceof Date) {
+    updatePayload.dateKey = toIstDateKey(body.date);
+  }
+
   const before = await Transaction.findOne({ _id: req.params.id, userId }).lean();
   if (!before) {
     return res.status(404).json({
@@ -151,7 +181,7 @@ export async function updateTransaction(req: Request, res: Response) {
 
   const updated = await Transaction.findOneAndUpdate(
     { _id: req.params.id, userId },
-    body,
+    updatePayload,
     { new: true, runValidators: true }
   ).lean();
 

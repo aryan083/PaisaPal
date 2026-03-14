@@ -5,7 +5,7 @@ import { parseLocalDate, toLocalDateKey } from '@/lib/utils'
 export function getAvailableMonths(transactions: Transaction[]): string[] {
   const months = new Set<string>()
   transactions.forEach(t => {
-    const d = toLocalDateKey(t.date)
+    const d = t.dateKey || toLocalDateKey(t.date)
     const [y, m] = d.split('-')
     months.add(`${y}-${m}`)
   })
@@ -18,16 +18,13 @@ export function filterTransactions(
   dayFilter: DayFilter
 ): Transaction[] {
   return transactions.filter(t => {
-    const d = toLocalDateKey(t.date)
+    const d = t.dateKey || toLocalDateKey(t.date)
     const [y, m] = d.split('-')
     if (`${y}-${m}` !== month) return false
 
-    if (dayFilter !== 'all') {
-      const day = parseLocalDate(d).getDay()
-      const isWeekend = day === 0 || day === 6
-      if (dayFilter === 'weekday' && isWeekend) return false
-      if (dayFilter === 'weekend' && !isWeekend) return false
-    }
+    const day = parseLocalDate(d).getDay()
+    if (dayFilter === 'weekday') return day >= 1 && day <= 5
+    if (dayFilter === 'weekend') return day === 0 || day === 6
     return true
   })
 }
@@ -48,7 +45,7 @@ export function computeFilteredStats(transactions: Transaction[]): Stats | null 
 
   const dateMap = new Map<string, number>()
   transactions.forEach(t => {
-    const d = toLocalDateKey(t.date)
+    const d = t.dateKey || toLocalDateKey(t.date)
     dateMap.set(d, (dateMap.get(d) || 0) + t.amount)
   })
   const byDate = Array.from(dateMap.entries())
