@@ -1,6 +1,6 @@
 import React from 'react'
 import type { Transaction } from '@/types'
-import { formatCurrency, formatDateShortWithWeekday } from '@/lib/utils'
+import { formatCurrency, formatDateShortWithWeekday, parseLocalDate } from '@/lib/utils'
 import type { DayFilter } from './DashboardFilters'
 import {
   Tooltip,
@@ -15,7 +15,7 @@ interface Props {
 }
 
 function getWeekOfMonth(dateStr: string): number {
-  const d = new Date(dateStr)
+  const d = parseLocalDate(dateStr)
   const day = d.getDate()
   return Math.min(5, Math.floor((day - 1) / 7) + 1)
 }
@@ -41,7 +41,7 @@ export function WeeklySpendingHeatmap({ transactions, dayFilter }: Props) {
 
   transactions.forEach(t => {
     const w = getWeekOfMonth(t.date)
-    const dow = new Date(t.date).getDay()
+    const dow = parseLocalDate(t.date).getDay()
     total[w - 1][dow] += t.amount
     count[w - 1][dow] += 1
     txns[w - 1][dow].push(t)

@@ -1,5 +1,5 @@
 import type { Transaction } from '@/types'
-import { formatCurrency, formatDateShortWithWeekday } from '@/lib/utils'
+import { formatCurrency, formatDateShortWithWeekday, parseLocalDate } from '@/lib/utils'
 import type { DayFilter } from './DashboardFilters'
 import {
   Tooltip,
@@ -21,7 +21,7 @@ export function SpendingHeatmap({ transactions, dayFilter = 'all' }: Props) {
   const countByDay = new Array(7).fill(0)
   const txnsByDay: Transaction[][] = new Array(7).fill(null).map(() => [])
   transactions.forEach(t => {
-    const day = new Date(t.date).getDay()
+    const day = parseLocalDate(t.date).getDay()
     byDay[day] += t.amount
     countByDay[day]++
     txnsByDay[day].push(t)

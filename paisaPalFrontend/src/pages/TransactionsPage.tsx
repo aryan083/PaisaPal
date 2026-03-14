@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, getWeekdayShort } from '@/lib/utils'
 import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode } from '@/types'
 import { Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
@@ -409,6 +409,7 @@ export function TransactionsPage() {
                 </button>
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Date</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Day</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Particulars</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Amount</th>
@@ -432,6 +433,7 @@ export function TransactionsPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{getWeekdayShort(tx.date)}</td>
                   <td className="px-4 py-3 text-foreground max-w-[200px] truncate">{tx.particulars}</td>
                   <td className="px-4 py-3">
                     <span
@@ -516,7 +518,7 @@ export function TransactionsPage() {
               <p className="text-sm text-foreground mb-1">{tx.particulars}</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{formatDate(tx.date)}</span>
+                  <span>{formatDate(tx.date)} · {getWeekdayShort(tx.date)}</span>
                   <span className="rounded-full bg-secondary px-1.5 py-0.5">{tx.mode}</span>
                 </div>
                 <div className="flex items-center gap-1">

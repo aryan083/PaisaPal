@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import { Upload, Eye, Copy, Check, X, Edit2, Trash2 } from 'lucide-react'
@@ -36,6 +36,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<'input' | 'preview' | 'result'>('input')
+  const [visibleRows, setVisibleRows] = useState(200)
 
   const categories = getAvailableCategories(settings)
 
@@ -353,12 +354,27 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     setPreviewRows([])
     setImportResult(null)
     setStep('input')
+    setVisibleRows(200)
     onClose()
   }
 
-  const selectedCount = previewRows.filter(r => r.isSelected && !r.error).length
-  const errorCount = previewRows.filter(r => r.error).length
-  const duplicateCount = previewRows.filter(r => r.isDuplicate).length
+  const selectedCount = useMemo(
+    () => previewRows.filter(r => r.isSelected && !r.error).length,
+    [previewRows],
+  )
+  const errorCount = useMemo(
+    () => previewRows.filter(r => r.error).length,
+    [previewRows],
+  )
+  const duplicateCount = useMemo(
+    () => previewRows.filter(r => r.isDuplicate).length,
+    [previewRows],
+  )
+
+  const displayedRows = useMemo(
+    () => previewRows.slice(0, visibleRows),
+    [previewRows, visibleRows],
+  )
 
   return (
     <Sheet open={open} onOpenChange={o => { if (!o) handleClose() }}>
@@ -442,6 +458,31 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
               </div>
             </div>
 
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">
+                Showing {Math.min(visibleRows, previewRows.length)} of {previewRows.length}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVisibleRows(v => Math.min(previewRows.length, v + 200))}
+                  disabled={visibleRows >= previewRows.length}
+                  className="text-xs text-muted-foreground hover:underline disabled:opacity-50"
+                >
+                  Show 200 more
+                </button>
+                <span className="text-muted-foreground">|</span>
+                <button
+                  type="button"
+                  onClick={() => setVisibleRows(previewRows.length)}
+                  disabled={visibleRows >= previewRows.length}
+                  className="text-xs text-primary hover:underline disabled:opacity-50"
+                >
+                  Show all
+                </button>
+              </div>
+            </div>
+
             {/* Preview Table */}
             <div className="border border-border rounded-xl overflow-hidden">
               <div className="max-h-[60vh] overflow-y-auto">
@@ -460,7 +501,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {previewRows.map(row => (
+                    {displayedRows.map(row => (
                       <tr 
                         key={row.row} 
                         className={`border-t border-border ${

@@ -5,6 +5,7 @@ import Budget from '../models/Budget';
 import RecurringRule from '../models/RecurringRule';
 import type {
   QueryParams,
+  BulkDeleteTransactionsInput,
   RemapCategoryInput,
   TransactionInput,
   TransactionUpdateInput,
@@ -210,6 +211,34 @@ export async function deleteTransaction(req: Request, res: Response) {
     data: null,
     error: null,
     message: 'Transaction deleted',
+  });
+}
+
+export async function bulkDeleteTransactions(req: Request, res: Response) {
+  await connectDB();
+
+  const body = req.body as BulkDeleteTransactionsInput;
+  const userId = req.user!.userId;
+
+  const result = await Transaction.deleteMany({
+    _id: { $in: body.ids },
+    userId,
+  });
+
+  createAuditLog({
+    userId,
+    action: 'DELETE',
+    resource: 'transaction',
+    resourceId: 'bulk',
+    before: { ids: body.ids },
+    after: { deletedCount: result.deletedCount },
+    req,
+  });
+
+  return res.status(200).json({
+    data: { deletedCount: result.deletedCount },
+    error: null,
+    message: `Deleted ${result.deletedCount} transactions`,
   });
 }
 

@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { toast } from 'sonner'
 import { useEffect } from 'react'
 import { formatToastMessage, getUserError } from '@/lib/userError'
+import { toLocalDateKey } from '@/lib/utils'
 
 export function TransactionForm() {
   const { settings, formOpen, closeForm, editingTransaction, addTransaction, updateTransaction } = useStore()
@@ -17,7 +18,7 @@ export function TransactionForm() {
   const form = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+      date: toLocalDateKey(new Date()),
       particulars: '',
       amount: 0,
       category: 'Other',
@@ -29,7 +30,7 @@ export function TransactionForm() {
   useEffect(() => {
     if (editingTransaction) {
       form.reset({
-        date: editingTransaction.date.split('T')[0],
+        date: toLocalDateKey(editingTransaction.date),
         particulars: editingTransaction.particulars,
         amount: editingTransaction.amount,
         category: editingTransaction.category,
@@ -38,7 +39,7 @@ export function TransactionForm() {
       })
     } else {
       form.reset({
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateKey(new Date()),
         particulars: '',
         amount: 0,
         category: 'Other',

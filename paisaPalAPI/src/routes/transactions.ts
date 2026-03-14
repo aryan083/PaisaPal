@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import {
+  bulkDeleteTransactions,
   createTransaction,
   deleteTransaction,
   exportTransactionsCsv,
@@ -14,6 +15,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { validate } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
 import {
+  BulkDeleteTransactionsSchema,
   QueryParamsSchema,
   RemapCategorySchema,
   TransactionSchema,
@@ -36,6 +38,11 @@ router.post(
   '/import/csv',
   upload.single('file'),
   asyncHandler(importTransactionsCsv),
+);
+router.post(
+  '/bulk-delete',
+  validate(BulkDeleteTransactionsSchema, 'body'),
+  asyncHandler(bulkDeleteTransactions),
 );
 router.put('/remap-category', validate(RemapCategorySchema, 'body'), asyncHandler(remapCategory));
 router.get('/:id', asyncHandler(getTransaction));

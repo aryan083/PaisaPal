@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useStore } from '@/store'
-import { formatCurrency, formatDateWithWeekday } from '@/lib/utils'
+import { formatCurrency, formatDateWithWeekday, parseLocalDate, toLocalDateKey } from '@/lib/utils'
 import {
   Bike, TrendingUp, Calendar, CreditCard, Trophy, Lightbulb,
   Activity, ShoppingBag, Flame, BarChart3, Star, Clock,
@@ -56,11 +56,14 @@ export function InsightsPage() {
   const onlinePct = stats.byMode.Online + stats.byMode.Cash > 0
     ? Math.round((stats.byMode.Online / (stats.byMode.Online + stats.byMode.Cash)) * 100) : 0
 
-  const dates = transactions.map(t => t.date.split('T')[0]).sort()
+  const dates = transactions.map(t => toLocalDateKey(t.date)).sort()
   const uniqueDates = [...new Set(dates)]
   let streak = 1
   for (let i = uniqueDates.length - 1; i > 0; i--) {
-    const diff = (new Date(uniqueDates[i]).getTime() - new Date(uniqueDates[i - 1]).getTime()) / 86400000
+    const diff =
+      (parseLocalDate(uniqueDates[i]).getTime() -
+        parseLocalDate(uniqueDates[i - 1]).getTime()) /
+      86400000
     if (diff === 1) streak++
     else break
   }
@@ -70,17 +73,17 @@ export function InsightsPage() {
 
   let weekdaySpend = 0, weekendSpend = 0, weekdayCount = 0, weekendCount = 0
   transactions.forEach(t => {
-    const day = new Date(t.date).getDay()
+    const day = parseLocalDate(t.date).getDay()
     if (day === 0 || day === 6) { weekendSpend += t.amount; weekendCount++ }
     else { weekdaySpend += t.amount; weekdayCount++ }
   })
 
   const allDays = new Set<string>()
   if (uniqueDates.length > 0) {
-    const start = new Date(uniqueDates[0])
-    const end = new Date(uniqueDates[uniqueDates.length - 1])
+    const start = parseLocalDate(uniqueDates[0])
+    const end = parseLocalDate(uniqueDates[uniqueDates.length - 1])
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      allDays.add(d.toISOString().split('T')[0])
+      allDays.add(toLocalDateKey(d))
     }
   }
   const zeroSpendDays = allDays.size - uniqueDates.length
@@ -205,7 +208,7 @@ export function InsightsPage() {
   // 10. Best Value Day
   const dayStats: { date: string; count: number; total: number }[] = []
   uniqueDates.forEach(date => {
-    const dayTxns = transactions.filter(t => t.date.split('T')[0] === date)
+    const dayTxns = transactions.filter(t => toLocalDateKey(t.date) === date)
     dayStats.push({
       date,
       count: dayTxns.length,
@@ -218,7 +221,7 @@ export function InsightsPage() {
   
   // 11. Monthly Projection Confidence
   const dailySpends = uniqueDates.map(d => 
-    transactions.filter(t => t.date.split('T')[0] === d).reduce((s, t) => s + t.amount, 0)
+    transactions.filter(t => toLocalDateKey(t.date) === d).reduce((s, t) => s + t.amount, 0)
   )
   const avgDailySpend = dailySpends.length > 0 ? dailySpends.reduce((s, d) => s + d, 0) / dailySpends.length : 0
   const variance = dailySpends.length > 1 

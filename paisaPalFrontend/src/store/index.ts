@@ -3,6 +3,7 @@ import type { Transaction, Settings, Stats, TabId } from '@/types'
 import { getTransactions, saveTransactions, getSettings, saveSettings } from '@/lib/storage'
 import type { Category } from '@/types'
 import {
+  bulkDeleteTransactionsApi,
   createTransactionApi,
   deleteTransactionApi,
   fetchSettings,
@@ -11,6 +12,8 @@ import {
   updateSettingsApi,
   updateTransactionApi,
 } from '@/lib/api'
+
+import { toLocalDateKey } from '@/lib/utils'
 
 import { useAuthStore } from '@/stores/authStore'
 import { useSyncStore } from '@/stores/syncStore'
@@ -187,7 +190,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
     try {
       if (online) {
-        await Promise.all(ids.map((id) => deleteTransactionApi(id)))
+        await bulkDeleteTransactionsApi(ids)
       } else {
         for (const id of ids) {
           useSyncStore.getState().addToQueue({
@@ -429,7 +432,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
     const dateMap = new Map<string, number>()
     transactions.forEach(t => {
-      const d = t.date.split('T')[0]
+      const d = toLocalDateKey(t.date)
       dateMap.set(d, (dateMap.get(d) || 0) + t.amount)
     })
     const byDate = Array.from(dateMap.entries())

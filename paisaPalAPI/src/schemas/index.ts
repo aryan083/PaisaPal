@@ -61,6 +61,14 @@ export const TransactionUpdateSchema = TransactionSchema.partial().superRefine(
   },
 );
 
+export const BulkDeleteTransactionsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+});
+
+export type BulkDeleteTransactionsInput = z.infer<
+  typeof BulkDeleteTransactionsSchema
+>;
+
 export type TransactionUpdateInput = z.infer<typeof TransactionUpdateSchema>;
 
 export const RemapCategorySchema = z.object({

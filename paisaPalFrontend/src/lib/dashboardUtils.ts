@@ -1,10 +1,11 @@
 import type { Transaction, Category, Stats } from '@/types'
 import type { DayFilter } from '@/components/dashboard/DashboardFilters'
+import { parseLocalDate, toLocalDateKey } from '@/lib/utils'
 
 export function getAvailableMonths(transactions: Transaction[]): string[] {
   const months = new Set<string>()
   transactions.forEach(t => {
-    const d = t.date.split('T')[0]
+    const d = toLocalDateKey(t.date)
     const [y, m] = d.split('-')
     months.add(`${y}-${m}`)
   })
@@ -17,12 +18,12 @@ export function filterTransactions(
   dayFilter: DayFilter
 ): Transaction[] {
   return transactions.filter(t => {
-    const d = t.date.split('T')[0]
+    const d = toLocalDateKey(t.date)
     const [y, m] = d.split('-')
     if (`${y}-${m}` !== month) return false
 
     if (dayFilter !== 'all') {
-      const day = new Date(d).getDay()
+      const day = parseLocalDate(d).getDay()
       const isWeekend = day === 0 || day === 6
       if (dayFilter === 'weekday' && isWeekend) return false
       if (dayFilter === 'weekend' && !isWeekend) return false
@@ -47,7 +48,7 @@ export function computeFilteredStats(transactions: Transaction[]): Stats | null 
 
   const dateMap = new Map<string, number>()
   transactions.forEach(t => {
-    const d = t.date.split('T')[0]
+    const d = toLocalDateKey(t.date)
     dateMap.set(d, (dateMap.get(d) || 0) + t.amount)
   })
   const byDate = Array.from(dateMap.entries())

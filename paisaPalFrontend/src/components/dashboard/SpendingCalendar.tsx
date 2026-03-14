@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Transaction } from '@/types'
-import { formatCurrency, formatDateWithWeekday } from '@/lib/utils'
+import { formatCurrency, formatDateWithWeekday, toLocalDateKey } from '@/lib/utils'
 import {
   Tooltip,
   TooltipContent,
@@ -22,12 +22,11 @@ type DayCell = {
 
 function buildMonthDays(selectedMonth: string): string[] {
   const [y, m] = selectedMonth.split('-').map(Number)
-  const first = new Date(y, m - 1, 1)
   const last = new Date(y, m, 0)
   const days: string[] = []
   for (let d = 1; d <= last.getDate(); d++) {
     const dt = new Date(y, m - 1, d)
-    days.push(dt.toISOString().split('T')[0])
+    days.push(toLocalDateKey(dt))
   }
   return days
 }
@@ -36,7 +35,7 @@ export function SpendingCalendar({ transactions, selectedMonth }: Props) {
   const txByDate = useMemo(() => {
     const map = new Map<string, Transaction[]>()
     transactions.forEach(t => {
-      const d = t.date.split('T')[0]
+      const d = toLocalDateKey(t.date)
       map.set(d, [...(map.get(d) ?? []), t])
     })
     return map

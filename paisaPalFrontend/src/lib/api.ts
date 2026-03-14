@@ -26,6 +26,17 @@ function getAuthToken(): string | null {
   }
 }
 
+export async function bulkDeleteTransactionsApi(ids: string[]): Promise<number> {
+  const res = await requestJson<{ deletedCount: number }>(
+    '/transactions/bulk-delete',
+    {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    },
+  )
+  return res.data?.deletedCount ?? 0
+}
+
 async function requestJson<T>(
   path: string,
   init?: RequestInit,
