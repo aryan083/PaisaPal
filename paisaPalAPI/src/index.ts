@@ -38,7 +38,7 @@ app.use(
   cors(cors_options),
 );
 
-app.options('*', cors(cors_options));
+app.options('/*', cors(cors_options));
 
 app.use(express.json({ limit: '10kb' }));
 
