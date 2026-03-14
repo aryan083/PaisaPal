@@ -231,19 +231,24 @@ export async function importTransactionsCsv(req: Request, res: Response) {
   const skipDuplicates = req.query.skipDuplicates === 'true';
   const userId = req.user!.userId;
 
-  const result = await importTransactionsFromCsv(file.buffer, {
-    dryRun,
-    skipDuplicates,
-    userId,
-  });
+  try {
+    const result = await importTransactionsFromCsv(file.buffer, {
+      dryRun,
+      skipDuplicates,
+      userId,
+    });
 
-  return res.status(200).json({
-    data: result,
-    error: null,
-    message: dryRun
-      ? 'Preview completed - no transactions inserted'
-      : `Imported ${result.inserted} transactions`,
-  });
+    return res.status(200).json({
+      data: result,
+      error: null,
+      message: dryRun
+        ? 'Preview completed - no transactions inserted'
+        : `Imported ${result.inserted} transactions`,
+    });
+  } catch (err) {
+    console.error('CSV import error:', err);
+    throw err;
+  }
 }
 
 export async function exportTransactionsCsv(req: Request, res: Response) {

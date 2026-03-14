@@ -144,7 +144,20 @@ export async function importTransactionsFromCsv(
 ): Promise<ImportCsvResult> {
   const { dryRun = false, skipDuplicates = false, userId } = options;
 
-  const records = parseCsv(csvBuffer);
+  let records: RawRecord[];
+  try {
+    records = parseCsv(csvBuffer);
+  } catch (err) {
+    console.error('CSV parse error:', err);
+    throw err;
+  }
+
+  console.log(`Parsed ${records.length} records from CSV`);
+  if (records.length > 0) {
+    console.log('First record keys:', Object.keys(records[0]));
+    console.log('First record:', JSON.stringify(records[0]));
+  }
+
   const errors: ImportError[] = [];
   const valid: Array<{
     row: number;
