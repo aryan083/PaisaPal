@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
 import { formatCurrency, formatDate, getWeekdayShort } from '@/lib/utils'
@@ -6,14 +6,17 @@ import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode
 import { Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { BulkImport } from '@/components/transactions/BulkImport'
-import { exportTransactionsCsv } from '@/lib/api'
+import { exportTransactionsCsv, fetchTransactionsPaginated } from '@/lib/api'
 import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
+import { useSyncStore } from '@/stores/syncStore'
 
 type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
 
 export function TransactionsPage() {
   const { settings, transactions, removeTransaction, bulkRemoveTransactions, openForm, formOpen } = useStore()
+  const isOnline = useSyncStore(s => s.isOnline)
+
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All')
   const [sort, setSort] = useState<SortKey>('date-desc')
@@ -29,7 +32,85 @@ export function TransactionsPage() {
   const [maxAmount, setMaxAmount] = useState('')
   const [hasNotes, setHasNotes] = useState<'All' | 'yes' | 'no'>('All')
 
-  const filtered = useMemo(() => {
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [pageTransactions, setPageTransactions] = useState<typeof transactions>([])
+  const limit = 50
+
+  const serverSort = useMemo(() => {
+    if (sort === 'date-desc') return { sort: 'date', order: 'desc' as const }
+    if (sort === 'date-asc') return { sort: 'date', order: 'asc' as const }
+    if (sort === 'amount-desc') return { sort: 'amount', order: 'desc' as const }
+    return { sort: 'amount', order: 'asc' as const }
+  }, [sort])
+
+  const loadPage = async (nextPage: number) => {
+    const res = await fetchTransactionsPaginated({
+      search: search || undefined,
+      category: categoryFilter !== 'All' ? categoryFilter : undefined,
+      mode: modeFilter !== 'All' ? modeFilter : undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      minAmount: minAmount ? parseFloat(minAmount) : undefined,
+      maxAmount: maxAmount ? parseFloat(maxAmount) : undefined,
+      hasNotes: hasNotes !== 'All' ? hasNotes === 'yes' : undefined,
+      ...serverSort,
+      page: nextPage,
+      limit,
+    })
+
+    const next = res.transactions.map(tx => ({
+      id: tx._id,
+      date: tx.date,
+      dateKey: tx.dateKey,
+      particulars: tx.particulars,
+      amount: tx.amount,
+      category: tx.category as Category,
+      mode: tx.mode as PaymentMode,
+      notes: tx.notes,
+      createdAt: tx.createdAt,
+      updatedAt: tx.updatedAt,
+    }))
+
+    setPageTransactions(next)
+    setTotal(res.total)
+    setPages(res.pages)
+    setPage(res.page)
+  }
+
+  useEffect(() => {
+    if (!isOnline) return
+    setSelectedIds(new Set())
+    setBulkDeleteConfirm(false)
+    setPage(1)
+    void loadPage(1)
+  }, [
+    isOnline,
+    search,
+    categoryFilter,
+    modeFilter,
+    startDate,
+    endDate,
+    minAmount,
+    maxAmount,
+    hasNotes,
+    serverSort,
+  ])
+
+  const goPrevPage = () => {
+    if (!isOnline) return
+    if (page <= 1) return
+    void loadPage(page - 1)
+  }
+
+  const goNextPage = () => {
+    if (!isOnline) return
+    if (page >= pages) return
+    void loadPage(page + 1)
+  }
+
+  const offlineFiltered = useMemo(() => {
     let result = [...transactions]
     if (search) {
       const q = search.toLowerCase()
@@ -63,14 +144,31 @@ export function TransactionsPage() {
     }
     result.sort((a, b) => {
       switch (sort) {
-        case 'date-desc': return new Date(b.date).getTime() - new Date(a.date).getTime()
-        case 'date-asc': return new Date(a.date).getTime() - new Date(b.date).getTime()
-        case 'amount-desc': return b.amount - a.amount
-        case 'amount-asc': return a.amount - b.amount
+        case 'date-desc':
+          return new Date(b.date).getTime() - new Date(a.date).getTime()
+        case 'date-asc':
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        case 'amount-desc':
+          return b.amount - a.amount
+        case 'amount-asc':
+          return a.amount - b.amount
       }
     })
     return result
-  }, [transactions, search, categoryFilter, sort, modeFilter, startDate, endDate, minAmount, maxAmount, hasNotes])
+  }, [
+    transactions,
+    search,
+    categoryFilter,
+    sort,
+    modeFilter,
+    startDate,
+    endDate,
+    minAmount,
+    maxAmount,
+    hasNotes,
+  ])
+
+  const filtered = isOnline ? pageTransactions : offlineFiltered
 
   const categories = useMemo(
     () => getAvailableCategories(settings),
@@ -126,6 +224,10 @@ export function TransactionsPage() {
     try {
       await removeTransaction(id)
       setDeletingId(null)
+      if (isOnline) {
+        const nextPage = page > 1 && filtered.length === 1 ? page - 1 : page
+        await loadPage(nextPage)
+      }
       toast.success('Transaction deleted')
     } catch (err) {
       const u = getUserError(err, 'Failed to delete transaction')
@@ -162,6 +264,10 @@ export function TransactionsPage() {
       await bulkRemoveTransactions(ids)
       setSelectedIds(new Set())
       setBulkDeleteConfirm(false)
+      if (isOnline) {
+        const nextPage = page > 1 && ids.length >= filtered.length ? page - 1 : page
+        await loadPage(nextPage)
+      }
       toast.success(`${count} transaction${count !== 1 ? 's' : ''} deleted`)
     } catch (err) {
       const u = getUserError(err, 'Failed to delete selected transactions')
@@ -214,6 +320,28 @@ export function TransactionsPage() {
             <Plus className="h-4 w-4" /> Add
           </button>
         </div>
+
+      {isOnline && pages > 1 && (
+        <div className="mt-4 md:hidden flex items-center justify-between">
+          <button
+            onClick={goPrevPage}
+            disabled={page <= 1}
+            className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+          >
+            Prev
+          </button>
+          <div className="text-xs text-muted-foreground">
+            Page {page} / {pages}
+          </div>
+          <button
+            onClick={goNextPage}
+            disabled={page >= pages}
+            className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      )}
       </div>
 
       {/* Advanced Filters Panel */}
@@ -483,6 +611,31 @@ export function TransactionsPage() {
           <div className="py-12 text-center text-muted-foreground">No transactions found</div>
         )}
       </div>
+
+      {/* Pagination (online only) */}
+      {isOnline && pages > 1 && (
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            Showing page {page} of {pages} ({total} total)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goPrevPage}
+              disabled={page <= 1}
+              className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <button
+              onClick={goNextPage}
+              disabled={page >= pages}
+              className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Cards */}
       <div className="md:hidden flex flex-col gap-3">
