@@ -179,8 +179,9 @@ export async function getBudgetStats(req: Request, res: Response) {
 
   const [year, monthNum] = month.split('-').map(Number);
 
-  const startDate = new Date(year, monthNum - 1, 1);
-  const endDate = new Date(year, monthNum, 0, 23, 59, 59, 999);
+  const monthStartKey = `${month}-01`;
+  const lastDay = new Date(year, monthNum, 0).getDate();
+  const monthEndKey = `${month}-${String(lastDay).padStart(2, '0')}`;
 
   const budgets = await Budget.find({ userId: req.user!.userId, month }).lean();
 
@@ -188,7 +189,7 @@ export async function getBudgetStats(req: Request, res: Response) {
     {
       $match: {
         userId,
-        date: { $gte: startDate, $lte: endDate },
+        dateKey: { $gte: monthStartKey, $lte: monthEndKey },
       },
     },
     {
@@ -204,14 +205,20 @@ export async function getBudgetStats(req: Request, res: Response) {
     spendingByCategory[item._id] = item.spent;
   }
 
-  const budgetStats = budgets.map((budget) => ({
-    category: budget.category,
-    monthlyLimit: budget.monthlyLimit,
-    spent: spendingByCategory[budget.category] || 0,
-    remaining: budget.monthlyLimit - (spendingByCategory[budget.category] || 0),
-    percentage: Math.round(((spendingByCategory[budget.category] || 0) / budget.monthlyLimit) * 100),
-    isOverBudget: (spendingByCategory[budget.category] || 0) > budget.monthlyLimit,
-  }));
+  const budgetStats = budgets.map((budget) => {
+    const spent = spendingByCategory[budget.category] || 0;
+    return {
+      category: budget.category,
+      monthlyLimit: budget.monthlyLimit,
+      spent,
+      remaining: budget.monthlyLimit - spent,
+      percentage:
+        budget.monthlyLimit > 0
+          ? Math.round((spent / budget.monthlyLimit) * 100)
+          : -1,
+      isOverBudget: spent > budget.monthlyLimit,
+    };
+  });
 
   // Add categories that have spending but no budget
   const budgetedCategories = new Set(budgets.map((b) => b.category));
