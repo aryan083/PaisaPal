@@ -13,7 +13,7 @@ import { SettingsPage } from './SettingsPage'
 import { AuthPage } from './AuthPage'
 
 const Index = () => {
-  const { activeTab, theme, init, applySnapshot } = useStore()
+  const { activeTab, theme, init, applySnapshot, setSnapshotView } = useStore()
   const { isAuthenticated, checkAuth, token, hasHydrated, isLoading } = useAuthStore()
 
   const snapshotFromUrl = () => {
@@ -87,6 +87,35 @@ const Index = () => {
   }, [isAuthenticated, applySnapshot])
 
   useEffect(() => {
+    if (isAuthenticated) return
+    const encoded = snapshotFromUrl()
+    if (!encoded) return
+
+    try {
+      const parsed = decodeSnapshot(encoded) as {
+        transactions?: unknown
+        settings?: unknown
+        budgets?: unknown
+      }
+      if (!parsed || !Array.isArray(parsed.transactions) || !parsed.settings) {
+        throw new Error('Invalid snapshot payload')
+      }
+
+      void applySnapshot({
+        transactions: parsed.transactions as any,
+        settings: parsed.settings as any,
+        budgets: Array.isArray(parsed.budgets) ? (parsed.budgets as any) : [],
+        viewOnly: true,
+      }).then(() => {
+        setSnapshotView(true)
+        toast.success('Snapshot opened (view only)')
+      })
+    } catch {
+      toast.error('Failed to open snapshot')
+    }
+  }, [isAuthenticated, applySnapshot, setSnapshotView])
+
+  useEffect(() => {
     if (token) {
       checkAuth()
     }
@@ -101,7 +130,8 @@ const Index = () => {
   }
 
   if (!isAuthenticated) {
-    return <AuthPage />
+    const hasSnapshot = Boolean(snapshotFromUrl() ?? snapshotFromSession())
+    if (!hasSnapshot) return <AuthPage />
   }
 
   return (

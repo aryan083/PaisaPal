@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Transaction, Settings, Stats, TabId } from '@/types'
 import { getTransactions, saveTransactions, getSettings, saveSettings } from '@/lib/storage'
 import type { Category } from '@/types'
+import type { ApiBudget } from '@/lib/api'
 import {
   bulkDeleteTransactionsApi,
   createTransactionApi,
@@ -28,8 +29,17 @@ interface AppStore {
   editingTransaction: Transaction | null
   isLoading: boolean
 
+  isSnapshotView: boolean
+  snapshotBudgets: ApiBudget[]
+
   init: () => void
-  applySnapshot: (data: { transactions: Transaction[]; settings: Settings }) => Promise<void>
+  applySnapshot: (data: {
+    transactions: Transaction[]
+    settings: Settings
+    budgets?: ApiBudget[]
+    viewOnly?: boolean
+  }) => Promise<void>
+  setSnapshotView: (v: boolean) => void
   setActiveTab: (tab: TabId) => void
   setTheme: (t: 'dark' | 'light') => void
   openForm: (tx?: Transaction) => void
@@ -57,6 +67,9 @@ export const useStore = create<AppStore>((set, get) => ({
   formOpen: false,
   editingTransaction: null,
   isLoading: false,
+
+  isSnapshotView: false,
+  snapshotBudgets: [],
 
   init: () => {
     void (async () => {
@@ -123,13 +136,23 @@ export const useStore = create<AppStore>((set, get) => ({
     const txs = data.transactions
     const settings = data.settings
 
-    set({ transactions: txs, settings })
+    const budgets = data.budgets ?? []
+    const viewOnly = Boolean(data.viewOnly)
+
+    set({
+      transactions: txs,
+      settings,
+      snapshotBudgets: budgets,
+      isSnapshotView: viewOnly,
+    })
     await Promise.all([
       saveTransactions(txs, namespace),
       saveSettings(settings, namespace),
     ])
     get().computeStats()
   },
+
+  setSnapshotView: (v) => set({ isSnapshotView: v }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 

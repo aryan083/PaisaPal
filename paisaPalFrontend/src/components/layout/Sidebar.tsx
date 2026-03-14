@@ -15,9 +15,13 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
 ]
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, theme, setTheme } = useStore()
+  const { activeTab, setActiveTab, theme, setTheme, isSnapshotView } = useStore()
   const { user, logout } = useAuthStore()
   const [collapsed, setCollapsed] = useState(false)
+
+  const navItems = isSnapshotView
+    ? NAV_ITEMS.filter(i => i.id === 'dashboard' || i.id === 'transactions' || i.id === 'budgets')
+    : NAV_ITEMS
 
   return (
     <aside className={cn(
@@ -46,7 +50,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 px-2 py-2">
         <ul className="space-y-1">
-          {NAV_ITEMS.map(item => (
+          {navItems.map(item => (
             <li key={item.id}>
               <button
                 onClick={() => setActiveTab(item.id)}
@@ -104,18 +108,20 @@ export function Sidebar() {
           {!collapsed && <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
         </button>
         
-        <button
-          onClick={logout}
-          aria-label="Logout"
-          title={collapsed ? 'Logout' : undefined}
-          className={cn(
-            'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors',
-            collapsed && 'justify-center'
-          )}
-        >
-          <LogOut className="h-5 w-5" />
-          {!collapsed && <span>Logout</span>}
-        </button>
+        {user && !isSnapshotView && (
+          <button
+            onClick={logout}
+            aria-label="Logout"
+            title={collapsed ? 'Logout' : undefined}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors',
+              collapsed && 'justify-center'
+            )}
+          >
+            <LogOut className="h-5 w-5" />
+            {!collapsed && <span>Logout</span>}
+          </button>
+        )}
         
         {!collapsed && <p className="mt-2 px-3 text-xs text-muted-foreground/50">v1.0.0</p>}
       </div>

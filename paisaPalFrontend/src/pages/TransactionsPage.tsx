@@ -14,7 +14,15 @@ import { useSyncStore } from '@/stores/syncStore'
 type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
 
 export function TransactionsPage() {
-  const { settings, transactions, removeTransaction, bulkRemoveTransactions, openForm, formOpen } = useStore()
+  const {
+    settings,
+    transactions,
+    removeTransaction,
+    bulkRemoveTransactions,
+    openForm,
+    formOpen,
+    isSnapshotView,
+  } = useStore()
   const isOnline = useSyncStore(s => s.isOnline)
 
   const [search, setSearch] = useState('')
@@ -80,13 +88,14 @@ export function TransactionsPage() {
   }
 
   useEffect(() => {
-    if (!isOnline) return
+    if (!isOnline || isSnapshotView) return
     setSelectedIds(new Set())
     setBulkDeleteConfirm(false)
     setPage(1)
     void loadPage(1)
   }, [
     isOnline,
+    isSnapshotView,
     search,
     categoryFilter,
     modeFilter,
@@ -99,15 +108,17 @@ export function TransactionsPage() {
   ])
 
   const goPrevPage = () => {
-    if (!isOnline) return
+    if (!effectiveOnline && !isSnapshotView) return
     if (page <= 1) return
-    void loadPage(page - 1)
+    if (isSnapshotView) setPage((p) => Math.max(1, p - 1))
+    else void loadPage(page - 1)
   }
 
   const goNextPage = () => {
-    if (!isOnline) return
+    if (!effectiveOnline && !isSnapshotView) return
     if (page >= pages) return
-    void loadPage(page + 1)
+    if (isSnapshotView) setPage((p) => Math.min(pages, p + 1))
+    else void loadPage(page + 1)
   }
 
   const offlineFiltered = useMemo(() => {
@@ -168,7 +179,24 @@ export function TransactionsPage() {
     hasNotes,
   ])
 
-  const filtered = isOnline ? pageTransactions : offlineFiltered
+  const snapshotFiltered = useMemo(() => {
+    if (!isSnapshotView) return []
+    return offlineFiltered
+  }, [isSnapshotView, offlineFiltered])
+
+  useEffect(() => {
+    if (!isSnapshotView) return
+    const nextPages = Math.max(1, Math.ceil(snapshotFiltered.length / limit))
+    const safePage = Math.min(page, nextPages)
+    if (safePage !== page) setPage(safePage)
+    setPages(nextPages)
+    setTotal(snapshotFiltered.length)
+    const start = (safePage - 1) * limit
+    setPageTransactions(snapshotFiltered.slice(start, start + limit))
+  }, [isSnapshotView, snapshotFiltered, page])
+
+  const effectiveOnline = isOnline && !isSnapshotView
+  const filtered = effectiveOnline ? pageTransactions : isSnapshotView ? pageTransactions : offlineFiltered
 
   const categories = useMemo(
     () => getAvailableCategories(settings),
@@ -216,6 +244,7 @@ export function TransactionsPage() {
   const hasActiveFilters = search || categoryFilter !== 'All' || modeFilter !== 'All' || startDate || endDate || minAmount || maxAmount || hasNotes !== 'All'
 
   const handleDelete = async (id: string) => {
+    if (isSnapshotView) return
     if (deletingId !== id) {
       setDeletingId(id)
       return
@@ -254,6 +283,7 @@ export function TransactionsPage() {
   }
 
   const handleBulkDelete = async () => {
+    if (isSnapshotView) return
     if (!bulkDeleteConfirm) {
       setBulkDeleteConfirm(true)
       return
@@ -310,18 +340,20 @@ export function TransactionsPage() {
           <button
             onClick={() => setBulkOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            disabled={isSnapshotView}
           >
             <Upload className="h-4 w-4" /> Import
           </button>
           <button
             onClick={() => openForm()}
             className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            disabled={isSnapshotView}
           >
             <Plus className="h-4 w-4" /> Add
           </button>
         </div>
 
-      {isOnline && pages > 1 && (
+      {(effectiveOnline || isSnapshotView) && pages > 1 && (
         <div className="mt-4 md:hidden flex items-center justify-between">
           <button
             onClick={goPrevPage}

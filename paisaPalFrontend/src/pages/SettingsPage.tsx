@@ -6,7 +6,7 @@ import { DEFAULT_CATEGORIES, getAvailableCategories, getCategoryHex } from '@/ty
 import { encodeSnapshot, formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
-import { fetchAllTransactions } from '@/lib/api'
+import { fetchAllTransactions, fetchBudgets } from '@/lib/api'
 import { useSyncStore } from '@/stores/syncStore'
 import {
   AlertDialog,
@@ -21,7 +21,15 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export function SettingsPage() {
-  const { settings, updateSettings, remapCategory, theme, setTheme, transactions } = useStore()
+  const {
+    settings,
+    updateSettings,
+    remapCategory,
+    theme,
+    setTheme,
+    transactions,
+    isSnapshotView,
+  } = useStore()
   const [stipend, setStipend] = useState(String(settings.stipend))
   const [extra, setExtra] = useState(String(settings.extra))
 
@@ -31,6 +39,7 @@ export function SettingsPage() {
   const [deleteRemapTo, setDeleteRemapTo] = useState('')
 
   const handleSave = async () => {
+    if (isSnapshotView) return
     try {
       await updateSettings({ stipend: parseInt(stipend) || 0, extra: parseInt(extra) || 0 })
       toast.success('Settings saved')
@@ -61,9 +70,13 @@ export function SettingsPage() {
     try {
       const online = useSyncStore.getState().isOnline
       let snapshotTransactions = transactions
+      let snapshotBudgets: any[] = []
 
       if (online) {
-        const apiTxs = await fetchAllTransactions()
+        const [apiTxs, apiBudgets] = await Promise.all([
+          fetchAllTransactions(),
+          fetchBudgets(),
+        ])
         snapshotTransactions = apiTxs.map((tx) => ({
           id: tx._id,
           date: tx.date,
@@ -76,9 +89,11 @@ export function SettingsPage() {
           createdAt: tx.createdAt,
           updatedAt: tx.updatedAt,
         }))
+
+        snapshotBudgets = apiBudgets
       }
 
-      const data = { transactions: snapshotTransactions, settings }
+      const data = { transactions: snapshotTransactions, settings, budgets: snapshotBudgets }
       const encoded = encodeSnapshot(data)
       const url = `${window.location.origin}${window.location.pathname}?snapshot=${encoded}`
       try {
@@ -110,6 +125,7 @@ export function SettingsPage() {
   const isCustomCategory = (name: string) => !DEFAULT_CATEGORIES.includes(name as never)
 
   const setCategoryColor = async (name: string, color: string) => {
+    if (isSnapshotView) return
     const next = [...(settings.categoryConfig ?? [])]
     const existingIdx = next.findIndex(c => c.name === name)
     if (existingIdx >= 0) {
@@ -129,6 +145,7 @@ export function SettingsPage() {
   }
 
   const addCategory = async () => {
+    if (isSnapshotView) return
     const name = newCategoryName.trim()
     if (!name) {
       toast.error('Category name is required')
@@ -156,12 +173,14 @@ export function SettingsPage() {
   }
 
   const openDeleteDialog = (name: string) => {
+    if (isSnapshotView) return
     setDeleteTarget(name)
     const fallback = categories.find(c => c !== name) ?? 'Other'
     setDeleteRemapTo(fallback)
   }
 
   const confirmDelete = async () => {
+    if (isSnapshotView) return
     if (!deleteTarget) return
     const fromCategory = deleteTarget
     const toCategory = deleteRemapTo
@@ -203,6 +222,7 @@ export function SettingsPage() {
               type="number"
               value={stipend}
               onChange={e => setStipend(e.target.value)}
+              disabled={isSnapshotView}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
           </div>
@@ -213,12 +233,17 @@ export function SettingsPage() {
               type="number"
               value={extra}
               onChange={e => setExtra(e.target.value)}
+              disabled={isSnapshotView}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
           </div>
         </div>
-        <button onClick={handleSave} className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-          Save Budget
+        <button
+          onClick={handleSave}
+          disabled={isSnapshotView}
+          className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+        >
+          Save
         </button>
       </section>
 
@@ -266,6 +291,7 @@ export function SettingsPage() {
                     type="color"
                     value={getCategoryHex(cat, settings)}
                     onChange={e => void setCategoryColor(cat, e.target.value)}
+                    disabled={isSnapshotView}
                     className="h-6 w-6 rounded border border-border bg-transparent p-0"
                   />
                   <span className="text-sm text-foreground">{cat}</span>
@@ -282,6 +308,7 @@ export function SettingsPage() {
                         <button
                           onClick={() => openDeleteDialog(cat)}
                           className="text-xs text-[hsl(var(--danger))] hover:underline"
+                          disabled={isSnapshotView}
                         >
                           Delete
                         </button>
@@ -307,6 +334,7 @@ export function SettingsPage() {
                             <select
                               value={deleteRemapTo}
                               onChange={e => setDeleteRemapTo(e.target.value)}
+                              disabled={isSnapshotView}
                               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
                             >
                               {categories
@@ -325,6 +353,7 @@ export function SettingsPage() {
                           <AlertDialogAction
                             onClick={() => void confirmDelete()}
                             className="bg-[hsl(var(--danger))] text-[hsl(var(--destructive-foreground))]"
+                            disabled={isSnapshotView}
                           >
                             Remap & Delete
                           </AlertDialogAction>
@@ -345,6 +374,7 @@ export function SettingsPage() {
               value={newCategoryName}
               onChange={e => setNewCategoryName(e.target.value)}
               placeholder="Category name"
+              disabled={isSnapshotView}
               className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
             <input
@@ -352,10 +382,12 @@ export function SettingsPage() {
               type="color"
               value={newCategoryColor}
               onChange={e => setNewCategoryColor(e.target.value)}
+              disabled={isSnapshotView}
               className="h-10 w-full sm:w-12 rounded-xl border border-border bg-transparent p-1"
             />
             <button
               onClick={() => void addCategory()}
+              disabled={isSnapshotView}
               className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
             >
               Add

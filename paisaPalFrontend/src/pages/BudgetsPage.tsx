@@ -24,7 +24,7 @@ function getCurrentMonth(): string {
 }
 
 export function BudgetsPage() {
-  const { settings } = useStore()
+  const { settings, transactions, isSnapshotView, snapshotBudgets } = useStore()
   const [budgets, setBudgets] = useState<ApiBudget[]>([])
   const [stats, setStats] = useState<BudgetStatsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -37,6 +37,37 @@ export function BudgetsPage() {
   const loadData = async () => {
     try {
       setLoading(true)
+      if (isSnapshotView) {
+        const budgetData = snapshotBudgets.filter(b => b.month === month)
+        const txsForMonth = transactions.filter(t => (t.dateKey || t.date).slice(0, 7) === month)
+
+        const spentMap = new Map<string, number>()
+        txsForMonth.forEach(t => {
+          spentMap.set(t.category, (spentMap.get(t.category) || 0) + t.amount)
+        })
+
+        const budgetStats = budgetData.map(b => {
+          const spent = spentMap.get(b.category) || 0
+          const remaining = b.monthlyLimit - spent
+          const percentage = b.monthlyLimit > 0 ? (spent / b.monthlyLimit) * 100 : 0
+          return {
+            category: b.category,
+            monthlyLimit: b.monthlyLimit,
+            spent,
+            remaining,
+            percentage,
+            isOverBudget: remaining < 0,
+          }
+        })
+
+        const totalBudgeted = budgetStats.reduce((s, b) => s + b.monthlyLimit, 0)
+        const totalSpent = budgetStats.reduce((s, b) => s + b.spent, 0)
+
+        setBudgets(budgetData)
+        setStats({ month, budgets: budgetStats, totalBudgeted, totalSpent })
+        return
+      }
+
       const [budgetData, statsData] = await Promise.all([
         fetchBudgets(month),
         fetchBudgetStats(month),
@@ -54,9 +85,10 @@ export function BudgetsPage() {
 
   useEffect(() => {
     void loadData()
-  }, [month])
+  }, [month, isSnapshotView])
 
   const handleCreate = async (input: BudgetInput) => {
+    if (isSnapshotView) return
     try {
       await createBudget(input)
       toast.success('Budget created')
@@ -70,6 +102,7 @@ export function BudgetsPage() {
   }
 
   const handleUpdate = async (id: string, monthlyLimit: number) => {
+    if (isSnapshotView) return
     try {
       await updateBudget(id, { monthlyLimit })
       toast.success('Budget updated')
@@ -84,6 +117,7 @@ export function BudgetsPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (isSnapshotView) return
     try {
       await deleteBudget(id)
       toast.success('Budget deleted')
@@ -145,6 +179,7 @@ export function BudgetsPage() {
         <button
           onClick={openCreate}
           className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          disabled={isSnapshotView}
         >
           <Plus className="h-4 w-4" /> Add Budget
         </button>
@@ -216,6 +251,7 @@ export function BudgetsPage() {
                           onClick={() => budget && openEdit(budget)}
                           className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                           aria-label="Edit budget"
+                          disabled={isSnapshotView}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -224,6 +260,7 @@ export function BudgetsPage() {
                             onClick={() => handleDelete(budget._id)}
                             className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                             aria-label="Delete budget"
+                            disabled={isSnapshotView}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -278,16 +315,18 @@ export function BudgetsPage() {
       )}
 
       {/* Budget Form Sheet */}
-      <BudgetFormSheet
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setEditingBudget(null) }}
-        budget={editingBudget}
-        month={month}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-        existingCategories={budgets.map(b => b.category)}
-        categories={categories}
-      />
+      {!isSnapshotView && (
+        <BudgetFormSheet
+          open={formOpen}
+          onClose={() => { setFormOpen(false); setEditingBudget(null) }}
+          budget={editingBudget}
+          month={month}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+          existingCategories={budgets.map(b => b.category)}
+          categories={categories}
+        />
+      )}
     </motion.div>
   )
 }

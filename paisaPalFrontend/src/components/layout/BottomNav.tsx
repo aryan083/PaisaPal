@@ -14,12 +14,16 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 ]
 
 export function BottomNav() {
-  const { activeTab, setActiveTab, openForm } = useStore()
+  const { activeTab, setActiveTab, isSnapshotView } = useStore()
+
+  const tabs = isSnapshotView
+    ? TABS.filter(t => t.id === 'dashboard' || t.id === 'transactions' || t.id === 'budgets')
+    : TABS
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40">
       <nav className="flex items-center justify-around border-t border-border bg-card px-2 pb-[env(safe-area-inset-bottom)] pt-2">
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}

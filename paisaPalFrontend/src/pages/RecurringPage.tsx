@@ -26,7 +26,7 @@ const FREQUENCY_LABELS: Record<Frequency, string> = {
 }
 
 export function RecurringPage() {
-  const { settings } = useStore()
+  const { settings, isSnapshotView } = useStore()
   const [rules, setRules] = useState<ApiRecurringRule[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
@@ -51,8 +51,28 @@ export function RecurringPage() {
   }
 
   useEffect(() => {
+    if (isSnapshotView) {
+      setLoading(false)
+      setRules([])
+      return
+    }
     void loadRules()
-  }, [])
+  }, [isSnapshotView])
+
+  if (isSnapshotView) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+      >
+        <h1 className="text-display text-2xl font-bold text-foreground mb-4">Recurring</h1>
+        <div className="card-base p-6 text-muted-foreground">
+          Recurring rules are not available in snapshot view.
+        </div>
+      </motion.div>
+    )
+  }
 
   const handleCreate = async (input: RecurringRuleInput) => {
     try {

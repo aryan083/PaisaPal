@@ -27,13 +27,15 @@ export function Header() {
               </span>
             </div>
           )}
-          <button
-            onClick={() => setShowActivity(true)}
-            aria-label="Activity feed"
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors"
-          >
-            <Activity className="h-4 w-4" />
-          </button>
+          {user && (
+            <button
+              onClick={() => setShowActivity(true)}
+              aria-label="Activity feed"
+              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors"
+            >
+              <Activity className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label="Toggle theme"
