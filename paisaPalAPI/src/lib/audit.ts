@@ -4,7 +4,7 @@ import { AuditLog } from '../models/AuditLog'
 interface AuditLogInput {
   userId: string
   action: 'CREATE' | 'UPDATE' | 'DELETE'
-  resource: 'transaction' | 'settings' | 'budget' | 'recurring'
+  resource: 'transaction' | 'settings' | 'budget' | 'recurring' | 'category'
   resourceId: string
   before?: Record<string, unknown>
   after?: Record<string, unknown>

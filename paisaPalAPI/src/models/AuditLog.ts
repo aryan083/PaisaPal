@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose'
 export interface IAuditLog extends Document {
   userId: mongoose.Types.ObjectId
   action: 'CREATE' | 'UPDATE' | 'DELETE'
-  resource: 'transaction' | 'settings' | 'budget' | 'recurring'
+  resource: 'transaction' | 'settings' | 'budget' | 'recurring' | 'category'
   resourceId: string
   before?: Record<string, unknown>
   after?: Record<string, unknown>
@@ -30,7 +30,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
     resource: {
       type: String,
       required: true,
-      enum: ['transaction', 'settings', 'budget', 'recurring'],
+      enum: ['transaction', 'settings', 'budget', 'recurring', 'category'],
     },
     resourceId: {
       type: String,
