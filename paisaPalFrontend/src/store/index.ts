@@ -35,6 +35,10 @@ interface AppStore {
   ) => Promise<void>
   updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>
   removeTransaction: (id: string) => Promise<void>
+  bulkRemoveTransactions: (ids: string[]) => Promise<void>
+  bulkAddTransactions: (
+    txs: Array<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>>,
+  ) => Promise<void>
   updateSettings: (s: Partial<Settings>) => Promise<void>
   remapCategory: (fromCategory: string, toCategory: string) => Promise<void>
   computeStats: () => void
@@ -168,6 +172,100 @@ export const useStore = create<AppStore>((set, get) => ({
         resource: 'transaction',
         data: { ...data, clientId: localTx.id },
       })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  bulkRemoveTransactions: async (ids) => {
+    if (ids.length === 0) return
+
+    set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
+
+    try {
+      if (online) {
+        await Promise.all(ids.map((id) => deleteTransactionApi(id)))
+      } else {
+        for (const id of ids) {
+          useSyncStore.getState().addToQueue({
+            operation: 'delete',
+            resource: 'transaction',
+            data: { clientId: id },
+          })
+        }
+      }
+
+      const idSet = new Set(ids)
+      const txs = get().transactions.filter((t) => !idSet.has(t.id))
+      set({ transactions: txs })
+      await saveTransactions(txs, namespace)
+      get().computeStats()
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  bulkAddTransactions: async (items) => {
+    if (items.length === 0) return
+
+    set({ isLoading: true })
+    const auth = useAuthStore.getState()
+    const namespace = auth.user?._id ?? 'anonymous'
+    const online = useSyncStore.getState().isOnline
+
+    try {
+      if (online) {
+        const created = await Promise.all(items.map((i) => createTransactionApi(i)))
+        const newTxs: Transaction[] = created.map((c) => ({
+          id: c._id,
+          date: c.date,
+          particulars: c.particulars,
+          amount: c.amount,
+          category: c.category as Transaction['category'],
+          mode: c.mode,
+          notes: c.notes,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        }))
+
+        const txs = [...newTxs, ...get().transactions]
+        set({ transactions: txs })
+        await saveTransactions(txs, namespace)
+        get().computeStats()
+        return
+      }
+
+      const now = new Date().toISOString()
+      const localTxs: Transaction[] = items.map((i) => ({
+        id: crypto.randomUUID(),
+        date: i.date,
+        particulars: i.particulars,
+        amount: i.amount,
+        category: i.category,
+        mode: i.mode,
+        notes: i.notes,
+        createdAt: now,
+        updatedAt: now,
+      }))
+
+      const txs = [...localTxs, ...get().transactions]
+      set({ transactions: txs })
+      await saveTransactions(txs, namespace)
+      get().computeStats()
+
+      for (let idx = 0; idx < localTxs.length; idx += 1) {
+        const localTx = localTxs[idx]
+        const item = items[idx]
+        if (!localTx || !item) continue
+        useSyncStore.getState().addToQueue({
+          operation: 'create',
+          resource: 'transaction',
+          data: { ...item, clientId: localTx.id },
+        })
+      }
     } finally {
       set({ isLoading: false })
     }

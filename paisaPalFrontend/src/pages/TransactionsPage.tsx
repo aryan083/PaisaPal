@@ -13,7 +13,7 @@ import { formatToastMessage, getUserError } from '@/lib/userError'
 type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
 
 export function TransactionsPage() {
-  const { settings, transactions, removeTransaction, openForm, formOpen } = useStore()
+  const { settings, transactions, removeTransaction, bulkRemoveTransactions, openForm, formOpen } = useStore()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All')
   const [sort, setSort] = useState<SortKey>('date-desc')
@@ -159,7 +159,7 @@ export function TransactionsPage() {
     const ids = Array.from(selectedIds)
     const count = ids.length
     try {
-      await Promise.all(ids.map(id => removeTransaction(id)))
+      await bulkRemoveTransactions(ids)
       setSelectedIds(new Set())
       setBulkDeleteConfirm(false)
       toast.success(`${count} transaction${count !== 1 ? 's' : ''} deleted`)

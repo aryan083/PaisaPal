@@ -6,6 +6,7 @@ import { importTransactionsCsv, type ImportResult } from '@/lib/api'
 import { getAvailableCategories, type Category } from '@/types'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import { useStore } from '@/store'
+import { useSyncStore } from '@/stores/syncStore'
 
 const EXPECTED_HEADERS = ['Date', 'Particulars', 'Amount paid', 'Total expenses', 'Mode of payment', 'Notes', 'Category']
 
@@ -29,7 +30,7 @@ interface BulkImportProps {
 }
 
 export function BulkImport({ open, onClose }: BulkImportProps) {
-  const { settings, updateSettings } = useStore()
+  const { settings, updateSettings, bulkAddTransactions } = useStore()
   const [file, setFile] = useState<File | null>(null)
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
@@ -63,6 +64,67 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
 
   const isUnknownCategory = (cat: string) => !categories.includes(cat)
 
+  const splitCsvLine = (line: string): string[] => {
+    const result: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i]
+      if (ch === '"') {
+        const next = line[i + 1]
+        if (inQuotes && next === '"') {
+          current += '"'
+          i += 1
+          continue
+        }
+        inQuotes = !inQuotes
+        continue
+      }
+      if (ch === ',' && !inQuotes) {
+        result.push(current)
+        current = ''
+        continue
+      }
+      current += ch
+    }
+    result.push(current)
+    return result.map((v) => v.trim())
+  }
+
+  const normalizeClientRecord = (r: Record<string, string>) => {
+    const date = r['date']
+    const particulars = r['particulars'] || r['description']
+    const amount = r['amount'] || r['amount paid']
+    const category = r['category']
+    const mode = r['mode'] || r['mode of payment'] || r['payment mode']
+    const notes = r['notes'] || r['note'] || ''
+
+    return { date, particulars, amount, category, mode, notes }
+  }
+
+  const parseCsvClient = (csv: string): Array<Record<string, string>> => {
+    const lines = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+    const nonEmpty = lines.filter((l) => l.trim().length > 0)
+    if (nonEmpty.length === 0) return []
+
+    const header = splitCsvLine(nonEmpty[0] ?? '')
+    const keys = header.map((h) => h.trim().toLowerCase())
+
+    const out: Array<Record<string, string>> = []
+    for (let i = 1; i < nonEmpty.length; i += 1) {
+      const row = splitCsvLine(nonEmpty[i] ?? '')
+      const rec: Record<string, string> = {}
+      for (let j = 0; j < keys.length; j += 1) {
+        const key = keys[j]
+        if (!key) continue
+        rec[key] = row[j] ?? ''
+      }
+      out.push(normalizeClientRecord(rec))
+    }
+    return out
+  }
+
   const handleDryRun = async () => {
     if (!file) {
       toast.error('Please select a file first')
@@ -70,6 +132,54 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     }
     try {
       setLoading(true)
+      const online = useSyncStore.getState().isOnline
+
+      if (!online) {
+        const text = await file.text()
+        const parsed = parseCsvClient(text)
+
+        const rows: PreviewRow[] = parsed.map((p, idx) => {
+          const rowNumber = idx + 2
+          const date = String(p.date ?? '')
+          const particulars = String(p.particulars ?? '')
+          const amount = Number(p.amount ?? 0)
+          const category = String(p.category ?? 'Other')
+          const modeRaw = String(p.mode ?? 'Online')
+          const mode: 'Online' | 'Cash' = modeRaw === 'Cash' ? 'Cash' : 'Online'
+          const notes = String(p.notes ?? '')
+
+          const err =
+            !date || !particulars || Number.isNaN(amount)
+              ? 'Invalid row'
+              : ''
+
+          return {
+            row: rowNumber,
+            date,
+            particulars,
+            amount,
+            category: (category || 'Other') as Category,
+            mode,
+            notes,
+            isDuplicate: false,
+            isSelected: !err,
+            isEditing: false,
+            ...(err ? { error: err } : {}),
+          }
+        })
+
+        setPreviewRows(rows)
+        setStep('preview')
+
+        const errCount = rows.filter((r) => r.error).length
+        if (errCount > 0) {
+          toast.warning(`${errCount} rows have errors - please fix them`)
+        } else {
+          toast.success(`Ready to import ${rows.length} transactions (offline)`)
+        }
+        return
+      }
+
       const result = await importTransactionsCsv(file, { dryRun: true })
       
       // Transform preview data into editable rows
@@ -181,6 +291,30 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
 
     try {
       setLoading(true)
+      const online = useSyncStore.getState().isOnline
+
+      if (!online) {
+        await bulkAddTransactions(
+          selectedRows.map((r) => ({
+            date: r.date,
+            particulars: r.particulars,
+            amount: r.amount,
+            category: r.category,
+            mode: r.mode,
+            notes: r.notes,
+          })),
+        )
+
+        setImportResult({
+          inserted: selectedRows.length,
+          failed: 0,
+          duplicates: 0,
+          errors: [],
+        })
+        setStep('result')
+        toast.success(`Imported ${selectedRows.length} transactions (offline)`)
+        return
+      }
       
       // Build CSV from selected rows
       const csvContent = buildCsvFromRows(selectedRows)
