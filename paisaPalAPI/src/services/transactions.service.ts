@@ -62,9 +62,9 @@ function normalizeRecord(record: RawRecord): NormalizedRecord {
   return {
     date: map.date,
     particulars: map.particulars ?? map.description,
-    amount: map.amount,
+    amount: map.amount ?? map['amount paid'] ?? map['amount_paid'],
     category: map.category,
-    mode: map.mode,
+    mode: map.mode ?? map['mode of payment'] ?? map['mode_of_payment'] ?? map['payment mode'] ?? map['payment_mode'],
     notes: map.notes ?? map.note ?? '',
   };
 }
