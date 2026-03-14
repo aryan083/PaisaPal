@@ -70,15 +70,22 @@ function normalizeRecord(record: RawRecord): NormalizedRecord {
 }
 
 function parseCsv(csvBuffer: Buffer): RawRecord[] {
-  return parse(csvBuffer, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-  }) as RawRecord[];
+  try {
+    return parse(csvBuffer, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    }) as RawRecord[];
+  } catch (err) {
+    console.error('CSV parse error:', err);
+    throw new Error(`Failed to parse CSV: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
 }
 
 function validateRow(rowNumber: number, record: RawRecord) {
+  console.log(`Validating row ${rowNumber}:`, JSON.stringify(record));
   const normalized = normalizeRecord(record);
+  console.log(`Normalized row ${rowNumber}:`, JSON.stringify(normalized));
   const parsed = TransactionSchema.safeParse({
     ...normalized,
     amount:
