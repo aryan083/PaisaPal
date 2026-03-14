@@ -126,7 +126,8 @@ export async function fetchTransactionsPaginated(filters?: TransactionFilters): 
 }
 
 export async function fetchAllTransactions(filters?: TransactionFilters): Promise<ApiTransaction[]> {
-  const limit = filters?.limit ?? 200
+  const requestedLimit = filters?.limit ?? 100
+  const limit = Math.min(requestedLimit, 100)
   let page = filters?.page ?? 1
   const all: ApiTransaction[] = []
 
