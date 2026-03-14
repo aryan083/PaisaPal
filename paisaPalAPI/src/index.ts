@@ -21,7 +21,9 @@ const cors_options: CorsOptions = {
 
     const allowed =
       origin === 'https://paisa-pal-c9ol.vercel.app' ||
-      origin === 'http://localhost:8080';
+      origin === 'http://localhost:8080' ||
+      origin === 'http://localhost:5173' ||
+      origin === 'http://localhost:3000';
 
     return callback(null, allowed);
   },
