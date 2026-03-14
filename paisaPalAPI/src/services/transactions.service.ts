@@ -122,10 +122,15 @@ async function checkDuplicates(
   const duplicateIndices = new Set<number>();
 
   const checks = transactions.map(async (tx, index) => {
+    const start = new Date(tx.date);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(tx.date);
+    end.setUTCHours(23, 59, 59, 999);
+
     const filter: Record<string, unknown> = {
       date: {
-        $gte: new Date(tx.date.setHours(0, 0, 0, 0)),
-        $lt: new Date(tx.date.setHours(23, 59, 59, 999)),
+        $gte: start,
+        $lt: end,
       },
       particulars: tx.particulars,
       amount: tx.amount,
