@@ -434,21 +434,23 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                               <span className="text-xs text-[hsl(var(--danger))] whitespace-nowrap">{row.error}</span>
                             )}
                             {row.isDuplicate && !row.error && (
-                              <Copy className="h-3 w-3 text-[hsl(var(--warning))]" title="Duplicate" />
+                              <span className="text-[hsl(var(--warning))]" title="Duplicate">
+                                <Copy className="h-3 w-3" />
+                              </span>
                             )}
                             <button
                               onClick={() => toggleRowEditing(row.row)}
                               className="p-1 hover:bg-secondary rounded"
                               title={row.isEditing ? 'Save' : 'Edit'}
                             >
-                              {row.isEditing ? <Check className="h-3 w-3 text-[hsl(var(--success))]" /> : <Edit2 className="h-3 w-3 text-muted-foreground" />}
+                              {row.isEditing ? <span className="text-[hsl(var(--success))]"><Check className="h-3 w-3" /></span> : <Edit2 className="h-3 w-3 text-muted-foreground" />}
                             </button>
                             <button
                               onClick={() => deleteRow(row.row)}
                               className="p-1 hover:bg-secondary rounded"
                               title="Delete"
                             >
-                              <Trash2 className="h-3 w-3 text-[hsl(var(--danger))]" />
+                              <span className="text-[hsl(var(--danger))]"><Trash2 className="h-3 w-3" /></span>
                             </button>
                           </div>
                         </td>
