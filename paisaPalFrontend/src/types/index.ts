@@ -157,6 +157,115 @@ export const DEFAULT_CATEGORY_HEX: Record<(typeof DEFAULT_CATEGORIES)[number], s
 
 export const CATEGORY_HEX: Record<string, string> = { ...DEFAULT_CATEGORY_HEX }
 
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n))
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = hex.trim().match(/^#([0-9a-fA-F]{6})$/)
+  if (!m) return null
+  const intVal = parseInt(m[1], 16)
+  return {
+    r: (intVal >> 16) & 255,
+    g: (intVal >> 8) & 255,
+    b: intVal & 255,
+  }
+}
+
+function rgbToHsl(
+  r: number,
+  g: number,
+  b: number,
+): { h: number; s: number; l: number } {
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const d = max - min
+  let h = 0
+  let s = 0
+  const l = (max + min) / 2
+
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1))
+    switch (max) {
+      case rn:
+        h = ((gn - bn) / d) % 6
+        break
+      case gn:
+        h = (bn - rn) / d + 2
+        break
+      default:
+        h = (rn - gn) / d + 4
+        break
+    }
+    h *= 60
+    if (h < 0) h += 360
+  }
+
+  return { h, s, l }
+}
+
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+
+  let rp = 0
+  let gp = 0
+  let bp = 0
+
+  if (h >= 0 && h < 60) {
+    rp = c
+    gp = x
+  } else if (h < 120) {
+    rp = x
+    gp = c
+  } else if (h < 180) {
+    gp = c
+    bp = x
+  } else if (h < 240) {
+    gp = x
+    bp = c
+  } else if (h < 300) {
+    rp = x
+    bp = c
+  } else {
+    rp = c
+    bp = x
+  }
+
+  return {
+    r: Math.round((rp + m) * 255),
+    g: Math.round((gp + m) * 255),
+    b: Math.round((bp + m) * 255),
+  }
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const to = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+
+function adjustCategoryHexForTheme(
+  hex: string,
+  theme: 'light' | 'dark',
+): string {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return hex
+
+  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b)
+  const baseS = Math.max(0.55, Math.min(hsl.s, 0.9))
+  const targetL = theme === 'dark'
+    ? Math.max(0.58, Math.min(hsl.l + 0.12, 0.72))
+    : Math.max(0.32, Math.min(hsl.l - 0.1, 0.48))
+
+  const next = hslToRgb(hsl.h, clamp01(baseS), clamp01(targetL))
+  return rgbToHex(next.r, next.g, next.b)
+}
+
 export function getAvailableCategories(settings?: Settings): string[] {
   const custom = (settings?.categoryConfig ?? []).map(c => c.name)
   const merged = [...DEFAULT_CATEGORIES, ...custom]
@@ -168,7 +277,9 @@ export function getCategoryHex(
   settings?: Settings,
 ): string {
   const custom = settings?.categoryConfig?.find(c => c.name === category)
-  if (custom?.color) return custom.color
-  const known = CATEGORY_HEX[category]
-  return known ?? '#6080a0'
+  const base = custom?.color || CATEGORY_HEX[category] || '#6080a0'
+
+  const isDark =
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  return adjustCategoryHexForTheme(base, isDark ? 'dark' : 'light')
 }
