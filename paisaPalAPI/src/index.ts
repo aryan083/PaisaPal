@@ -15,14 +15,30 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 
+const allowed_origins = new Set([
+  'https://paisa-pal-c9ol.vercel.app',
+  'http://localhost:8080',
+]);
+
+const cors_options: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    callback(null, allowed_origins.has(origin));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+  optionsSuccessStatus: 204,
+};
+
 app.use(
-  cors({
-    origin: ['https://paisa-pal-c9ol.vercel.app', 'http://localhost:8080'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false,
-  }),
+  cors(cors_options),
 );
+
+app.options('*', cors(cors_options));
 
 app.use(express.json({ limit: '10kb' }));
 
@@ -39,6 +55,10 @@ app.use(
 );
 
 app.get('/healthz', (_req: Request, res: Response) => {
+  res.status(200).json({ data: { status: 'ok' }, error: null });
+});
+
+app.get('/api/healthz', (_req: Request, res: Response) => {
   res.status(200).json({ data: { status: 'ok' }, error: null });
 });
 
