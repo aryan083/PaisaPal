@@ -1,4 +1,4 @@
-import cors from 'cors';
+import cors, { type CorsOptions } from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -15,30 +15,26 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 
-const allowed_origins = new Set([
-  'https://paisa-pal-c9ol.vercel.app',
-  'http://localhost:8080',
-]);
-
-const cors_options: cors.CorsOptions = {
+const cors_options: CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-    callback(null, allowed_origins.has(origin));
+    if (!origin) return callback(null, true);
+
+    const allowed =
+      origin === 'https://paisa-pal-c9ol.vercel.app' ||
+      origin === 'http://localhost:8080';
+
+    return callback(null, allowed);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: false,
   optionsSuccessStatus: 204,
+  preflightContinue: false,
 };
 
 app.use(
   cors(cors_options),
 );
-
-app.options('/*', cors(cors_options));
 
 app.use(express.json({ limit: '10kb' }));
 
