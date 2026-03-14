@@ -12,7 +12,7 @@ type ApiResponse<T> = {
 };
 
 function getApiBaseUrl(): string {
-  return import.meta.env.VITE_API_URL ?? '/api';
+  return import.meta.env.VITE_API_URL ?? 'https://paisa-pal-alpha.vercel.app';
 }
 
 function getAuthToken(): string | null {

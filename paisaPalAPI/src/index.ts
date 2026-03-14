@@ -17,8 +17,7 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL ?? false) : '*',
+    origin: process.env.FRONTEND_URL ?? '*',
   }),
 );
 
