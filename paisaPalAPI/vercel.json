@@ -5,6 +5,5 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.ts" }
-  ],
-  "nodeVersion": "22.x"
+  ]
 }
