@@ -12,7 +12,7 @@ import { AuthPage } from './AuthPage'
 
 const Index = () => {
   const { activeTab, theme, init } = useStore()
-  const { isAuthenticated, checkAuth, token } = useAuthStore()
+  const { isAuthenticated, checkAuth, token, hasHydrated, isLoading } = useAuthStore()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -29,6 +29,10 @@ const Index = () => {
       checkAuth()
     }
   }, [token, checkAuth])
+
+  if (!hasHydrated || (token && isLoading)) {
+    return null
+  }
 
   if (!isAuthenticated) {
     return <AuthPage />
