@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { connectDB } from '../lib/mongodb';
 import Transaction from '../models/Transaction';
-import RecurringRule from '../models/RecurringRule';
+import RecurringTransaction from '../models/RecurringTransaction';
 import Settings from '../models/Settings';
 import Envelope from '../models/Envelope';
 import type {
@@ -440,7 +440,7 @@ export async function remapCategory(req: Request, res: Response) {
       { userId, category: body.fromCategory },
       { $set: { category: body.toCategory } },
     ),
-    RecurringRule.updateMany(
+    RecurringTransaction.updateMany(
       { userId, category: body.fromCategory },
       { $set: { category: body.toCategory } },
     ),

@@ -14,7 +14,14 @@ export const CATEGORIES = DEFAULT_CATEGORIES
 
 export type Category = string
 export type PaymentMode = 'Online' | 'Cash' | 'Card'
-export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+export type RuleFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+export type Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'
+
+export type GoalStatus = 'active' | 'completed' | 'paused' | 'ended'
+export type RecurringStatus = 'active' | 'paused' | 'ended'
+export type EnvelopeStatus = 'under' | 'warning' | 'over'
+export type SurplusAction = 'save' | 'split' | 'carry' | 'pending'
+export type ContributionType = 'manual' | 'surplus' | 'rapido_tax' | 'auto'
 
 export interface CategoryConfigEntry {
   name: string
@@ -38,6 +45,11 @@ export interface Settings {
   stipend: number
   extra: number
   categoryConfig?: CategoryConfigEntry[]
+  rapidoTaxEnabled?: boolean
+  rapidoTaxPercent?: number
+  primarySavingsGoalId?: string
+  monthEndReminderEnabled?: boolean
+  envelopeWarningThreshold?: number
 }
 
 export interface Stats {
@@ -61,7 +73,7 @@ export interface RecurringRule {
   category: Category
   mode: PaymentMode
   notes: string
-  frequency: Frequency
+  frequency: RuleFrequency
   dayOfMonth?: number
   dayOfWeek?: number
   startDate: string
@@ -96,6 +108,104 @@ export interface BudgetStats {
   budgets: BudgetStat[]
   totalBudgeted: number
   totalSpent: number
+}
+
+export interface SavingsGoal {
+  _id: string
+  name: string
+  emoji: string
+  targetAmount: number
+  savedAmount: number
+  monthlyTarget: number
+  deadline?: string
+  status: GoalStatus
+  color: string
+  progressPercent: number
+  monthsLeft?: number
+  monthlyNeeded?: number
+  eta?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SavingsContribution {
+  _id: string
+  goalId: string
+  amount: number
+  type: ContributionType
+  note?: string
+  transactionId?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface RecurringTransaction {
+  _id: string
+  name: string
+  amount: number
+  category: Category
+  mode: 'Online' | 'Cash'
+  notes?: string
+  frequency: Frequency
+  startDate: string
+  endDate?: string
+  lastPaidDate?: string
+  nextDueDate: string
+  status: RecurringStatus
+  autoDetected: boolean
+  occurrences: number
+  totalPaid: number
+  daysUntilDue: number
+  projectedMonthly: number
+  projectedYearly: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EnvelopeItem {
+  category: Category
+  limit: number
+  spent: number
+  status: EnvelopeStatus
+  percentUsed?: number
+  remaining?: number
+}
+
+export interface Envelope {
+  _id: string
+  month: string
+  envelopes: EnvelopeItem[]
+  surplusAmount: number
+  surplusAction: SurplusAction
+  savingsGoalId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DetectedRecurring {
+  name: string
+  amount: number
+  category: Category
+  frequency: Frequency
+  confidence: number
+  occurrences: number
+  avgGapDays?: number
+  lastSeen: string
+  suggestedNextDate: string
+  matchingTransactionIds: string[]
+}
+
+export interface SavingsStats {
+  totalSaved: number
+  activeGoals: number
+  completedGoals: number
+  savingsRate: number
+  monthlyRecurringCost: number
+  upcomingDue: RecurringTransaction[]
+  noSpendDays: number
+  noSpendStreak: number
+  bestStreak: number
+  rapidoTaxSaved: number
 }
 
 export interface TransactionFilters {
@@ -141,7 +251,16 @@ export interface ImportResult {
   preview?: ImportPreview[]
 }
 
-export type TabId = 'dashboard' | 'transactions' | 'recurring' | 'budgets' | 'insights' | 'settings'
+export type TabId =
+  | 'dashboard'
+  | 'transactions'
+  | 'recurring'
+  | 'budgets'
+  | 'insights'
+  | 'settings'
+  | 'savings'
+  | 'recurring_tx'
+  | 'envelopes'
 
 export const DEFAULT_CATEGORY_HEX: Record<(typeof DEFAULT_CATEGORIES)[number], string> = {
   'Rapido': '#ff6b35',

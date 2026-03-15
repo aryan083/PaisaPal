@@ -1,5 +1,5 @@
 import { useStore } from '@/store'
-import { LayoutDashboard, Receipt, TrendingUp, Settings, Plus, Repeat, Wallet } from 'lucide-react'
+import { LayoutDashboard, Receipt, TrendingUp, Settings, Repeat, Wallet, PiggyBank, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import type { TabId } from '@/types'
@@ -7,8 +7,9 @@ import type { TabId } from '@/types'
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'transactions', label: 'Transactions', icon: Receipt },
-  { id: 'recurring', label: 'Recurring', icon: Repeat },
-  { id: 'budgets', label: 'Budgets', icon: Wallet },
+  { id: 'savings', label: 'Savings', icon: PiggyBank },
+  { id: 'recurring', label: 'Recurring', icon: RefreshCw },
+  { id: 'envelopes', label: 'Envelopes', icon: Wallet },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -17,7 +18,7 @@ export function BottomNav() {
   const { activeTab, setActiveTab, isSnapshotView } = useStore()
 
   const tabs = isSnapshotView
-    ? TABS.filter(t => t.id === 'dashboard' || t.id === 'transactions' || t.id === 'budgets')
+    ? TABS.filter(t => t.id === 'dashboard' || t.id === 'transactions' || t.id === 'envelopes')
     : TABS
 
   return (

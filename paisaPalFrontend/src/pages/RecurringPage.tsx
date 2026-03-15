@@ -13,12 +13,12 @@ import {
   type RecurringRuleInput,
 } from '@/lib/api'
 import { formatCurrency, formatDate, toLocalDateKey } from '@/lib/utils'
-import { getAvailableCategories, getCategoryHex, type Category, type Frequency } from '@/types'
+import { getAvailableCategories, getCategoryHex, type Category, type RuleFrequency } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import { useStore } from '@/store'
 
-const FREQUENCY_LABELS: Record<Frequency, string> = {
+const FREQUENCY_LABELS: Record<RuleFrequency, string> = {
   daily: 'Daily',
   weekly: 'Weekly',
   monthly: 'Monthly',

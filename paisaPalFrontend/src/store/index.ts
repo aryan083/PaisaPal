@@ -1,5 +1,14 @@
 import { create } from 'zustand'
-import type { Transaction, Settings, Stats, TabId } from '@/types'
+import type {
+  Envelope,
+  RecurringTransaction,
+  SavingsGoal,
+  SavingsStats,
+  Settings,
+  Stats,
+  TabId,
+  Transaction,
+} from '@/types'
 import { getTransactions, saveTransactions, getSettings, saveSettings } from '@/lib/storage'
 import type { Category } from '@/types'
 import type { ApiBudget } from '@/lib/api'
@@ -23,6 +32,10 @@ interface AppStore {
   transactions: Transaction[]
   settings: Settings
   stats: Stats | null
+  savingsGoals: SavingsGoal[]
+  recurringTransactions: RecurringTransaction[]
+  envelopes: Envelope | null
+  savingsStats: SavingsStats | null
   activeTab: TabId
   theme: 'dark' | 'light'
   formOpen: boolean
@@ -56,12 +69,29 @@ interface AppStore {
   updateSettings: (s: Partial<Settings>) => Promise<void>
   remapCategory: (fromCategory: string, toCategory: string) => Promise<void>
   computeStats: () => void
+
+  setSavingsGoals: (goals: SavingsGoal[]) => void
+  addSavingsGoal: (goal: SavingsGoal) => void
+  updateSavingsGoal: (id: string, goal: SavingsGoal) => void
+  removeSavingsGoal: (id: string) => void
+
+  setRecurringTransactions: (items: RecurringTransaction[]) => void
+  addRecurringTransaction: (item: RecurringTransaction) => void
+  updateRecurringTransaction: (id: string, item: RecurringTransaction) => void
+  removeRecurringTransaction: (id: string) => void
+
+  setEnvelopes: (env: Envelope | null) => void
+  setSavingsStats: (stats: SavingsStats | null) => void
 }
 
 export const useStore = create<AppStore>((set, get) => ({
   transactions: [],
   settings: { stipend: 12000, extra: 0, categoryConfig: [] },
   stats: null,
+  savingsGoals: [],
+  recurringTransactions: [],
+  envelopes: null,
+  savingsStats: null,
   activeTab: 'dashboard',
   theme: (localStorage.getItem('paisa-theme') as 'dark' | 'light') || 'dark',
   formOpen: false,
@@ -115,6 +145,11 @@ export const useStore = create<AppStore>((set, get) => ({
           stipend: apiSettings.stipend,
           extra: apiSettings.extra,
           categoryConfig: apiSettings.categoryConfig ?? [],
+          rapidoTaxEnabled: apiSettings.rapidoTaxEnabled,
+          rapidoTaxPercent: apiSettings.rapidoTaxPercent,
+          primarySavingsGoalId: apiSettings.primarySavingsGoalId,
+          monthEndReminderEnabled: apiSettings.monthEndReminderEnabled,
+          envelopeWarningThreshold: apiSettings.envelopeWarningThreshold,
         }
 
         set({ transactions, settings })
@@ -437,6 +472,11 @@ export const useStore = create<AppStore>((set, get) => ({
           stipend: updated.stipend,
           extra: updated.extra,
           categoryConfig: updated.categoryConfig ?? [],
+          rapidoTaxEnabled: updated.rapidoTaxEnabled,
+          rapidoTaxPercent: updated.rapidoTaxPercent,
+          primarySavingsGoalId: updated.primarySavingsGoalId,
+          monthEndReminderEnabled: updated.monthEndReminderEnabled,
+          envelopeWarningThreshold: updated.envelopeWarningThreshold,
         }
         set({ settings })
         await saveSettings(settings, namespace)
@@ -515,4 +555,24 @@ export const useStore = create<AppStore>((set, get) => ({
       }
     })
   },
+
+  setSavingsGoals: (goals) => set({ savingsGoals: goals }),
+  addSavingsGoal: (goal) => set((s) => ({ savingsGoals: [goal, ...s.savingsGoals] })),
+  updateSavingsGoal: (id, goal) =>
+    set((s) => ({ savingsGoals: s.savingsGoals.map((g) => (g._id === id ? goal : g)) })),
+  removeSavingsGoal: (id) =>
+    set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g._id !== id) })),
+
+  setRecurringTransactions: (items) => set({ recurringTransactions: items }),
+  addRecurringTransaction: (item) =>
+    set((s) => ({ recurringTransactions: [item, ...s.recurringTransactions] })),
+  updateRecurringTransaction: (id, item) =>
+    set((s) => ({
+      recurringTransactions: s.recurringTransactions.map((r) => (r._id === id ? item : r)),
+    })),
+  removeRecurringTransaction: (id) =>
+    set((s) => ({ recurringTransactions: s.recurringTransactions.filter((r) => r._id !== id) })),
+
+  setEnvelopes: (env) => set({ envelopes: env }),
+  setSavingsStats: (stats) => set({ savingsStats: stats }),
 }))

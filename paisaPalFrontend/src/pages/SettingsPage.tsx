@@ -1,13 +1,14 @@
 import { motion } from 'framer-motion'
 import { useStore } from '@/store'
 import { useState } from 'react'
-import { Sun, Moon, Download, Copy } from 'lucide-react'
+import { Sun, Moon, Download, Copy, PiggyBank } from 'lucide-react'
 import { DEFAULT_CATEGORIES, getAvailableCategories, getCategoryHex } from '@/types'
 import { encodeSnapshot, formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import { fetchAllTransactions, fetchBudgets } from '@/lib/api'
 import { useSyncStore } from '@/stores/syncStore'
+import { useSavingsGoals } from '@/hooks/useSavingsGoals'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,8 +31,19 @@ export function SettingsPage() {
     transactions,
     isSnapshotView,
   } = useStore()
+  const { goals } = useSavingsGoals()
   const [stipend, setStipend] = useState(String(settings.stipend))
   const [extra, setExtra] = useState(String(settings.extra))
+
+  const [rapidoTaxEnabled, setRapidoTaxEnabled] = useState(Boolean(settings.rapidoTaxEnabled))
+  const [rapidoTaxPercent, setRapidoTaxPercent] = useState(String(settings.rapidoTaxPercent ?? 10))
+  const [primarySavingsGoalId, setPrimarySavingsGoalId] = useState(settings.primarySavingsGoalId ?? '')
+  const [monthEndReminderEnabled, setMonthEndReminderEnabled] = useState(
+    Boolean(settings.monthEndReminderEnabled),
+  )
+  const [envelopeWarningThreshold, setEnvelopeWarningThreshold] = useState(
+    String(settings.envelopeWarningThreshold ?? 80),
+  )
 
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryColor, setNewCategoryColor] = useState('#6080a0')
@@ -41,7 +53,15 @@ export function SettingsPage() {
   const handleSave = async () => {
     if (isSnapshotView) return
     try {
-      await updateSettings({ stipend: parseInt(stipend) || 0, extra: parseInt(extra) || 0 })
+      await updateSettings({
+        stipend: parseInt(stipend) || 0,
+        extra: parseInt(extra) || 0,
+        rapidoTaxEnabled,
+        rapidoTaxPercent: Math.min(25, Math.max(5, parseInt(rapidoTaxPercent) || 10)),
+        primarySavingsGoalId: primarySavingsGoalId || undefined,
+        monthEndReminderEnabled,
+        envelopeWarningThreshold: Math.min(95, Math.max(50, parseInt(envelopeWarningThreshold) || 80)),
+      })
       toast.success('Settings saved')
     } catch (err) {
       const u = getUserError(err, 'Failed to save settings')
@@ -245,6 +265,100 @@ export function SettingsPage() {
         >
           Save
         </button>
+      </section>
+
+      {/* Savings Preferences */}
+      <section className="card-base p-5 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <PiggyBank className="h-4 w-4 text-primary" />
+          <h2 className="text-display text-base font-semibold text-foreground">Savings Preferences</h2>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-foreground">Rapido Tax</div>
+              <div className="text-xs text-muted-foreground">Auto-save a % of every Rapido transaction</div>
+            </div>
+            <button
+              onClick={() => setRapidoTaxEnabled(!rapidoTaxEnabled)}
+              disabled={isSnapshotView}
+              className={cn(
+                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                rapidoTaxEnabled ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground',
+              )}
+            >
+              {rapidoTaxEnabled ? 'Enabled' : 'Disabled'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Rapido Tax % (5–25)</label>
+              <input
+                type="number"
+                value={rapidoTaxPercent}
+                onChange={(e) => setRapidoTaxPercent(e.target.value)}
+                disabled={isSnapshotView || !rapidoTaxEnabled}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Envelope warning % (50–95)</label>
+              <input
+                type="number"
+                value={envelopeWarningThreshold}
+                onChange={(e) => setEnvelopeWarningThreshold(e.target.value)}
+                disabled={isSnapshotView}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Primary savings goal</label>
+            <select
+              value={primarySavingsGoalId}
+              onChange={(e) => setPrimarySavingsGoalId(e.target.value)}
+              disabled={isSnapshotView}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+            >
+              <option value="">Auto-pick first active goal</option>
+              {goals
+                .filter((g) => g.status === 'active')
+                .map((g) => (
+                  <option key={g._id} value={g._id}>
+                    {g.emoji} {g.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-foreground">Month-end reminder</div>
+              <div className="text-xs text-muted-foreground">Remind you to handle envelope surplus</div>
+            </div>
+            <button
+              onClick={() => setMonthEndReminderEnabled(!monthEndReminderEnabled)}
+              disabled={isSnapshotView}
+              className={cn(
+                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                monthEndReminderEnabled ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground',
+              )}
+            >
+              {monthEndReminderEnabled ? 'Enabled' : 'Disabled'}
+            </button>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={isSnapshotView}
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            Save preferences
+          </button>
+        </div>
       </section>
 
       {/* Appearance */}

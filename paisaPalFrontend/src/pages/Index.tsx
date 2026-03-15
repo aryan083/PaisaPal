@@ -6,8 +6,9 @@ import { decodeSnapshot } from '@/lib/utils'
 import { toast } from 'sonner'
 import { DashboardPage } from './DashboardPage'
 import { TransactionsPage } from './TransactionsPage'
-import { RecurringPage } from './RecurringPage'
-import { BudgetsPage } from './BudgetsPage'
+import { RecurringTransactionsPage } from './RecurringTransactionsPage'
+import { SavingsPage } from './SavingsPage'
+import { EnvelopesPage } from './EnvelopesPage'
 import { InsightsPage } from './InsightsPage'
 import { SettingsPage } from './SettingsPage'
 import { AuthPage } from './AuthPage'
@@ -138,8 +139,10 @@ const Index = () => {
     <AppShell>
       {activeTab === 'dashboard' && <DashboardPage />}
       {activeTab === 'transactions' && <TransactionsPage />}
-      {activeTab === 'recurring' && <RecurringPage />}
-      {activeTab === 'budgets' && <BudgetsPage />}
+      {activeTab === 'savings' && <SavingsPage />}
+      {activeTab === 'recurring' && <RecurringTransactionsPage />}
+      {activeTab === 'envelopes' && <EnvelopesPage />}
+      {activeTab === 'budgets' && <EnvelopesPage />}
       {activeTab === 'insights' && <InsightsPage />}
       {activeTab === 'settings' && <SettingsPage />}
     </AppShell>

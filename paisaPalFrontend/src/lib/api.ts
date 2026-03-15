@@ -278,6 +278,11 @@ export type ApiSettings = {
   stipend: number;
   extra: number;
   categoryConfig?: Array<{ name: string; color: string }>;
+  rapidoTaxEnabled?: boolean;
+  rapidoTaxPercent?: number;
+  primarySavingsGoalId?: string;
+  monthEndReminderEnabled?: boolean;
+  envelopeWarningThreshold?: number;
 };
 
 export async function fetchSettings(): Promise<ApiSettings> {
@@ -317,6 +322,277 @@ export type ApiStats = Record<string, unknown>;
 
 export async function fetchStats(): Promise<ApiStats> {
   const res = await requestJson<ApiStats>('/stats');
+  return res.data!;
+}
+
+export type ApiSavingsStats = {
+  totalSaved: number;
+  activeGoals: number;
+  completedGoals: number;
+  savingsRate: number;
+  monthlyRecurringCost: number;
+  upcomingDue: any[];
+  noSpendDays: number;
+  noSpendStreak: number;
+  bestStreak: number;
+  rapidoTaxSaved: number;
+};
+
+export async function fetchSavingsStats(): Promise<ApiSavingsStats> {
+  const res = await requestJson<ApiSavingsStats>('/stats/savings');
+  return res.data!;
+}
+
+// Savings Goals API
+export type ApiSavingsGoal = {
+  _id: string;
+  name: string;
+  emoji: string;
+  targetAmount: number;
+  savedAmount: number;
+  monthlyTarget: number;
+  deadline?: string;
+  status: 'active' | 'completed' | 'paused' | 'ended';
+  color: string;
+  progressPercent: number;
+  monthsLeft?: number;
+  monthlyNeeded?: number;
+  eta?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SavingsGoalCreateBody = {
+  name: string;
+  emoji?: string;
+  targetAmount: number;
+  deadline?: string;
+  color?: string;
+};
+
+export type SavingsGoalUpdateBody = Partial<SavingsGoalCreateBody>;
+
+export async function fetchSavingsGoals(): Promise<ApiSavingsGoal[]> {
+  const res = await requestJson<ApiSavingsGoal[]>('/savings/goals');
+  return res.data!;
+}
+
+export async function createSavingsGoal(body: SavingsGoalCreateBody): Promise<ApiSavingsGoal> {
+  const res = await requestJson<ApiSavingsGoal>('/savings/goals', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
+}
+
+export async function updateSavingsGoal(id: string, body: SavingsGoalUpdateBody): Promise<ApiSavingsGoal> {
+  const res = await requestJson<ApiSavingsGoal>(`/savings/goals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
+}
+
+export async function deleteSavingsGoal(id: string): Promise<void> {
+  await requestJson<null>(`/savings/goals/${id}`, { method: 'DELETE' });
+}
+
+export type SavingsContributionCreateBody = {
+  amount: number;
+  type: 'manual' | 'surplus' | 'rapido_tax' | 'auto';
+  note?: string;
+};
+
+export type ApiSavingsContribution = {
+  _id: string;
+  userId: string;
+  goalId: string;
+  amount: number;
+  type: 'manual' | 'surplus' | 'rapido_tax' | 'auto';
+  note?: string;
+  transactionId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function contributeToGoal(
+  goalId: string,
+  body: SavingsContributionCreateBody,
+): Promise<{ goal: ApiSavingsGoal; contribution: ApiSavingsContribution }> {
+  const res = await requestJson<{ goal: ApiSavingsGoal; contribution: ApiSavingsContribution }>(
+    `/savings/goals/${goalId}/contribute`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return res.data!;
+}
+
+export async function fetchGoalHistory(goalId: string): Promise<ApiSavingsContribution[]> {
+  const res = await requestJson<ApiSavingsContribution[]>(`/savings/goals/${goalId}/history`);
+  return res.data!;
+}
+
+// Recurring Transactions API (new)
+export type ApiRecurringTransaction = {
+  _id: string;
+  name: string;
+  amount: number;
+  category: string;
+  mode: 'Online' | 'Cash';
+  notes?: string;
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  startDate: string;
+  endDate?: string;
+  lastPaidDate?: string;
+  nextDueDate: string;
+  status: 'active' | 'paused' | 'ended';
+  autoDetected: boolean;
+  occurrences: number;
+  totalPaid: number;
+  daysUntilDue: number;
+  projectedMonthly: number;
+  projectedYearly: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecurringTransactionCreateBody = {
+  name: string;
+  amount: number;
+  category: string;
+  mode?: 'Online' | 'Cash';
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  startDate: string;
+  endDate?: string;
+  notes?: string;
+};
+
+export async function fetchRecurringTransactions(status?: 'active' | 'paused' | 'ended'): Promise<ApiRecurringTransaction[]> {
+  const query = status ? `?status=${status}` : '';
+  const res = await requestJson<ApiRecurringTransaction[]>(`/recurring-transactions${query}`);
+  return res.data!;
+}
+
+export async function createRecurringTransaction(body: RecurringTransactionCreateBody): Promise<ApiRecurringTransaction> {
+  const res = await requestJson<ApiRecurringTransaction>('/recurring-transactions', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
+}
+
+export async function updateRecurringTransaction(
+  id: string,
+  body: Partial<RecurringTransactionCreateBody>,
+): Promise<ApiRecurringTransaction> {
+  const res = await requestJson<ApiRecurringTransaction>(`/recurring-transactions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
+}
+
+export async function deleteRecurringTransaction(id: string): Promise<void> {
+  await requestJson<null>(`/recurring-transactions/${id}`, { method: 'DELETE' });
+}
+
+export async function markRecurringPaid(
+  id: string,
+  body?: { date?: string; amount?: number },
+): Promise<{ recurring: ApiRecurringTransaction; transaction: ApiTransaction }> {
+  const res = await requestJson<{ recurring: ApiRecurringTransaction; transaction: ApiTransaction }>(
+    `/recurring-transactions/${id}/mark-paid`,
+    { method: 'POST', body: JSON.stringify(body ?? {}) },
+  );
+  return res.data!;
+}
+
+export type ApiDetectedRecurring = {
+  name: string;
+  amount: number;
+  category: string;
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  confidence: number;
+  occurrences: number;
+  avgGapDays: number;
+  lastSeen: string;
+  suggestedNextDate: string;
+  matchingTransactionIds: string[];
+};
+
+export async function detectRecurringTransactions(): Promise<ApiDetectedRecurring[]> {
+  const res = await requestJson<{ suggestions: ApiDetectedRecurring[] }>(
+    '/recurring-transactions/detect',
+  );
+  return res.data!.suggestions;
+}
+
+export async function confirmDetectedRecurring(suggestions: Array<{
+  name: string;
+  amount: number;
+  category: string;
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  suggestedNextDate: string;
+}>): Promise<{ created: ApiRecurringTransaction[] }> {
+  const res = await requestJson<{ created: ApiRecurringTransaction[] }>(
+    '/recurring-transactions/detect/confirm',
+    { method: 'POST', body: JSON.stringify({ suggestions }) },
+  );
+  return res.data!;
+}
+
+// Envelopes API
+export type ApiEnvelopeItem = {
+  category: string;
+  limit: number;
+  spent: number;
+  status: 'under' | 'warning' | 'over';
+};
+
+export type ApiEnvelope = {
+  _id: string;
+  month: string;
+  envelopes: ApiEnvelopeItem[];
+  surplusAmount: number;
+  surplusAction: 'save' | 'split' | 'carry' | 'pending';
+  savingsGoalId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchEnvelope(month: string): Promise<ApiEnvelope> {
+  const res = await requestJson<ApiEnvelope>(`/envelopes/${month}`);
+  return res.data!;
+}
+
+export async function createEnvelope(body: {
+  month: string;
+  envelopes: Array<{ category: string; limit: number }>;
+}): Promise<ApiEnvelope> {
+  const res = await requestJson<ApiEnvelope>('/envelopes', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
+}
+
+export async function updateEnvelope(month: string, body: {
+  envelopes: Array<{ category: string; limit: number }>;
+}): Promise<ApiEnvelope> {
+  const res = await requestJson<ApiEnvelope>(`/envelopes/${month}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return res.data!;
+}
+
+export async function handleEnvelopeSurplus(month: string, body: {
+  action: 'save' | 'split' | 'carry';
+  goalId?: string;
+}): Promise<any> {
+  const res = await requestJson<any>(`/envelopes/${month}/surplus`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
   return res.data!;
 }
 
@@ -481,7 +757,16 @@ export async function fetchBudgetStats(month: string): Promise<BudgetStatsData> 
 export type ApiAuditLog = {
   _id: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  resource: 'transaction' | 'settings' | 'budget' | 'recurring' | 'category';
+  resource:
+    | 'transaction'
+    | 'settings'
+    | 'budget'
+    | 'recurring'
+    | 'category'
+    | 'savings_goal'
+    | 'savings_contribution'
+    | 'recurring_transaction'
+    | 'envelope';
   resourceId: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
