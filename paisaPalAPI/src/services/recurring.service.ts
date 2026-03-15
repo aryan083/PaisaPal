@@ -5,44 +5,75 @@ function toIstDateKey(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
+function istStartOfDayUtc(d: Date): Date {
+  const istKey = toIstDateKey(d); // YYYY-MM-DD
+  const [y, m, day] = istKey.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, day, 0, 0, 0) - 330 * 60 * 1000);
+}
+
+function addIstDaysUtc(base: Date, days: number): Date {
+  const istKey = toIstDateKey(base);
+  const [y, m, d] = istKey.split('-').map(Number);
+  const shifted = new Date(Date.UTC(y, m - 1, d + days, 0, 0, 0));
+  return istStartOfDayUtc(shifted);
+}
+
+function getIstDayOfWeek(base: Date): number {
+  const istKey = toIstDateKey(base);
+  const [y, m, d] = istKey.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0)).getUTCDay();
+}
+
 export function calculateNextDueDate(rule: IRecurringRule, fromDate: Date = new Date()): Date {
-  const next = new Date(fromDate);
+  const next = istStartOfDayUtc(fromDate);
 
   switch (rule.frequency) {
     case 'daily':
-      next.setDate(next.getDate() + 1);
-      break;
+      return addIstDaysUtc(next, 1);
 
     case 'weekly':
-      const targetDay = rule.dayOfWeek ?? 0;
-      const currentDay = next.getDay();
-      const daysUntilTarget = (targetDay - currentDay + 7) % 7;
-      next.setDate(next.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
-      break;
+      {
+        const targetDay = rule.dayOfWeek ?? 0;
+        const currentDay = getIstDayOfWeek(next);
+        const daysUntilTarget = (targetDay - currentDay + 7) % 7;
+        const delta = daysUntilTarget === 0 ? 7 : daysUntilTarget;
+        return addIstDaysUtc(next, delta);
+      }
 
     case 'monthly':
-      const targetDate = rule.dayOfMonth ?? 1;
-      // Create fresh date for next month calculation
-      const nextMonth = new Date(fromDate);
-      nextMonth.setDate(targetDate);
-      if (nextMonth <= fromDate) {
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
+      {
+        const targetDate = rule.dayOfMonth ?? 1;
+        const nextMonthBase = istStartOfDayUtc(fromDate);
+        const istKey = toIstDateKey(nextMonthBase);
+        const [y, m] = istKey.split('-').map(Number);
+
+        const candidateThis = new Date(Date.UTC(y, m - 1, targetDate, 0, 0, 0) - 330 * 60 * 1000);
+        let candidate = candidateThis;
+        if (candidate <= nextMonthBase) {
+          candidate = new Date(Date.UTC(y, m, targetDate, 0, 0, 0) - 330 * 60 * 1000);
+        }
+
+        const candIstKey = toIstDateKey(candidate);
+        const [cy, cm] = candIstKey.split('-').map(Number);
+        if (candidate.getUTCDate() !== targetDate) {
+          const lastDay = new Date(Date.UTC(cy, cm, 0, 0, 0, 0) - 330 * 60 * 1000);
+          return lastDay;
+        }
+        return candidate;
       }
-      // Handle months with fewer days (e.g., Feb 30 -> Feb 28/29)
-      if (nextMonth.getDate() !== targetDate) {
-        nextMonth.setDate(0); // Last day of previous month
-      }
-      return nextMonth;
 
     case 'yearly':
-      const targetMonthDay = rule.dayOfMonth ?? 1;
-      const nextYear = new Date(fromDate);
-      nextYear.setDate(targetMonthDay);
-      nextYear.setMonth(0); // January
-      if (nextYear <= fromDate) {
-        nextYear.setFullYear(nextYear.getFullYear() + 1);
+      {
+        const targetMonthDay = rule.dayOfMonth ?? 1;
+        const base = istStartOfDayUtc(fromDate);
+        const istKey = toIstDateKey(base);
+        const [y] = istKey.split('-').map(Number);
+        let candidate = new Date(Date.UTC(y, 0, targetMonthDay, 0, 0, 0) - 330 * 60 * 1000);
+        if (candidate <= base) {
+          candidate = new Date(Date.UTC(y + 1, 0, targetMonthDay, 0, 0, 0) - 330 * 60 * 1000);
+        }
+        return candidate;
       }
-      return nextYear;
   }
 
   return next;
@@ -66,7 +97,7 @@ export async function materializeRecurringTransactions(
   const RecurringRule = (await import('../models/RecurringRule')).default;
 
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = istStartOfDayUtc(now);
 
   const filter: Record<string, unknown> = {
     isActive: true,

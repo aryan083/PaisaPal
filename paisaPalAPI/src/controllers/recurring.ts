@@ -48,13 +48,30 @@ export async function createRecurringRule(req: Request, res: Response) {
   const body = req.body as RecurringRuleInput;
   const userId = req.user!.userId;
 
+  const parseIstDate = (value: string | Date) => {
+    if (value instanceof Date) {
+      const istKey = value.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const [y, m, d] = istKey.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 330 * 60 * 1000);
+    }
+
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 330 * 60 * 1000);
+  };
+
+  const startDate = parseIstDate(body.startDate);
+  const endDate = body.endDate ? parseIstDate(body.endDate) : undefined;
+
   const nextDue = calculateNextDueDate({
     ...body,
-    startDate: body.startDate,
-  } as IRecurringRule, body.startDate);
+    startDate,
+    endDate,
+  } as IRecurringRule, startDate);
 
   const rule = await RecurringRule.create({
     ...body,
+    startDate,
+    ...(endDate ? { endDate } : {}),
     userId,
     nextDue,
   });
@@ -162,19 +179,31 @@ export async function previewRecurringRule(req: Request, res: Response) {
   const count = parseInt(req.query.count as string) || 5;
   const body = req.body as RecurringRuleInput;
 
+  const parseIstDate = (value: string | Date) => {
+    if (value instanceof Date) {
+      const istKey = value.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const [y, m, d] = istKey.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 330 * 60 * 1000);
+    }
+
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - 330 * 60 * 1000);
+  };
+
   const occurrences: Date[] = [];
-  const endDate = body.endDate ? new Date(body.endDate) : undefined;
+  const startDate = parseIstDate(body.startDate);
+  const endDate = body.endDate ? parseIstDate(body.endDate) : undefined;
 
   // First occurrence is the start date itself
-  if (!endDate || body.startDate <= endDate) {
-    occurrences.push(new Date(body.startDate));
+  if (!endDate || startDate <= endDate) {
+    occurrences.push(startDate);
   }
 
   // Calculate subsequent occurrences
-  let current = body.startDate;
+  let current = startDate;
   while (occurrences.length < count) {
     const next = calculateNextDueDate(
-      { ...body, nextDue: current } as IRecurringRule,
+      { ...body, startDate, ...(endDate ? { endDate } : {}), nextDue: current } as IRecurringRule,
       current,
     );
 

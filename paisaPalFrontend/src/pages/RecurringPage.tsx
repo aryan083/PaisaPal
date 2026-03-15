@@ -12,7 +12,7 @@ import {
   type ApiRecurringRule,
   type RecurringRuleInput,
 } from '@/lib/api'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, toLocalDateKey } from '@/lib/utils'
 import { getAvailableCategories, getCategoryHex, type Category, type Frequency } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { formatToastMessage, getUserError } from '@/lib/userError'
@@ -366,7 +366,7 @@ function RuleFormSheet({ open, onClose, rule, onCreate, onUpdate, onPreview, cat
       setFrequency('monthly')
       setDayOfMonth('1')
       setDayOfWeek('0')
-      setStartDate(new Date().toISOString().split('T')[0])
+      setStartDate(toLocalDateKey(new Date()))
       setEndDate('')
       setIsActive(true)
     }

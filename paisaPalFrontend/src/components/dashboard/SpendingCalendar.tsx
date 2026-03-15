@@ -98,10 +98,10 @@ export function SpendingCalendar({ transactions, selectedMonth }: Props) {
                       {c.dayOfMonth}
                     </span>
                     <span
-                      className="mt-1 h-1.5 w-5 rounded-full"
+                      className="mt-1 h-2.5 w-7 rounded-full"
                       style={{ background: `hsl(var(--primary) / ${opacity})` }}
                     />
-                    <span className="mt-1 text-[8px] text-muted-foreground">
+                    <span className="mt-1 text-[8px] font-semibold text-foreground">
                       {c.total > 0 ? `₹${Math.round(c.total)}` : ''}
                     </span>
                   </button>

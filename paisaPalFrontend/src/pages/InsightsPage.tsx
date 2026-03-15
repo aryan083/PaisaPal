@@ -53,6 +53,8 @@ export function InsightsPage() {
   const projectedTotal = stats.totalSpent + dailyBurn * daysLeft
   const targetDaily = daysLeft > 0 ? Math.round((budget - stats.totalSpent) / daysLeft) : 0
 
+  const remaining = budget - stats.totalSpent
+
   const onlinePct = stats.byMode.Online + stats.byMode.Cash > 0
     ? Math.round((stats.byMode.Online / (stats.byMode.Online + stats.byMode.Cash)) * 100) : 0
 
@@ -266,7 +268,12 @@ export function InsightsPage() {
 
         <motion.div variants={item}>
           <InsightCard icon={TrendingUp} title="Budget Health" color="#22d47a">
-            <p className="text-muted-foreground">{pctUsed}% used · {formatCurrency(Math.max(0, budget - stats.totalSpent))} remaining</p>
+            <p className="text-muted-foreground">
+              {pctUsed}% used ·{' '}
+              {remaining < 0
+                ? `${formatCurrency(Math.abs(remaining))} over`
+                : `${formatCurrency(remaining)} remaining`}
+            </p>
             <p className="text-muted-foreground">Daily burn: {formatCurrency(dailyBurn)}</p>
             <p className="text-muted-foreground">Projected: {formatCurrency(projectedTotal)} {projectedTotal > budget ? '⚠️ Over budget!' : '✅ On track'}</p>
           </InsightCard>

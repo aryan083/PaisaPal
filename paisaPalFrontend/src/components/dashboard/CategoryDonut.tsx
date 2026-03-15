@@ -39,7 +39,15 @@ export function CategoryDonut({ stats }: Props) {
                   if (!active || !payload?.length) return null
                   const p = payload[0]
                   const v = typeof p.value === 'number' ? p.value : Number(p.value)
-                  const l = typeof label === 'string' ? label : String(label)
+                  const payloadCategory = (p as any)?.payload?.category
+                  const l =
+                    (typeof payloadCategory === 'string' && payloadCategory.trim())
+                      ? payloadCategory
+                      : typeof label === 'string'
+                        ? label
+                        : label != null
+                          ? String(label)
+                          : 'Other'
 
                   return (
                     <div
