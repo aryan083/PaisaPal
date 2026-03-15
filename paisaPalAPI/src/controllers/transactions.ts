@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { connectDB } from '../lib/mongodb';
 import Transaction from '../models/Transaction';
-import Budget from '../models/Budget';
 import RecurringRule from '../models/RecurringRule';
+import Settings from '../models/Settings';
+import Envelope from '../models/Envelope';
 import type {
   QueryParams,
   BulkDeleteTransactionsInput,
@@ -12,6 +13,8 @@ import type {
 } from '../schemas';
 import { importTransactionsFromCsv } from '../services/transactions.service';
 import { createAuditLog } from '../lib/audit';
+import { applyRapidoTaxContribution } from '../lib/rapidoTax';
+import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
 
 function toIstDateKey(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -128,6 +131,24 @@ export async function createTransaction(req: Request, res: Response) {
     req,
   });
 
+  void (async () => {
+    try {
+      const settings = await Settings.findOne({ userId }).lean();
+      const threshold = settings?.envelopeWarningThreshold ?? 80;
+      await syncEnvelopeForTransaction(userId, created.date, created.category, threshold);
+
+      if (created.category === 'Rapido') {
+        await applyRapidoTaxContribution({
+          userId,
+          amount: created.amount,
+          transactionId: created._id.toString(),
+        });
+      }
+    } catch {
+      // fire-and-forget
+    }
+  })();
+
   return res.status(201).json({
     data: created,
     error: null,
@@ -205,6 +226,17 @@ export async function updateTransaction(req: Request, res: Response) {
     req,
   });
 
+  void (async () => {
+    try {
+      const settings = await Settings.findOne({ userId }).lean();
+      const threshold = settings?.envelopeWarningThreshold ?? 80;
+      const date = updated.date instanceof Date ? updated.date : new Date(updated.date);
+      await syncEnvelopeForTransaction(userId, date, updated.category, threshold);
+    } catch {
+      // fire-and-forget
+    }
+  })();
+
   return res.status(200).json({
     data: updated,
     error: null,
@@ -236,6 +268,16 @@ export async function deleteTransaction(req: Request, res: Response) {
     before: deleted,
     req,
   });
+
+  void (async () => {
+    try {
+      const settings = await Settings.findOne({ userId }).lean();
+      const threshold = settings?.envelopeWarningThreshold ?? 80;
+      await syncEnvelopeForTransaction(userId, deleted.date, deleted.category, threshold);
+    } catch {
+      // fire-and-forget
+    }
+  })();
 
   return res.status(200).json({
     data: null,
@@ -393,18 +435,19 @@ export async function remapCategory(req: Request, res: Response) {
   const body = req.body as RemapCategoryInput;
   const userId = req.user!.userId;
 
-  const [txRes, budgetRes, recurringRes] = await Promise.all([
+  const [txRes, recurringRes, envelopeRes] = await Promise.all([
     Transaction.updateMany(
-      { userId, category: body.fromCategory },
-      { $set: { category: body.toCategory } },
-    ),
-    Budget.updateMany(
       { userId, category: body.fromCategory },
       { $set: { category: body.toCategory } },
     ),
     RecurringRule.updateMany(
       { userId, category: body.fromCategory },
       { $set: { category: body.toCategory } },
+    ),
+    Envelope.updateMany(
+      { userId, 'envelopes.category': body.fromCategory },
+      { $set: { 'envelopes.$[e].category': body.toCategory } },
+      { arrayFilters: [{ 'e.category': body.fromCategory }] },
     ),
   ]);
 
@@ -417,8 +460,8 @@ export async function remapCategory(req: Request, res: Response) {
       fromCategory: body.fromCategory,
       toCategory: body.toCategory,
       transactionsModified: txRes.modifiedCount,
-      budgetsModified: budgetRes.modifiedCount,
       recurringRulesModified: recurringRes.modifiedCount,
+      envelopesModified: envelopeRes.modifiedCount,
     },
     req,
   });
@@ -426,8 +469,8 @@ export async function remapCategory(req: Request, res: Response) {
   return res.status(200).json({
     data: {
       transactionsModified: txRes.modifiedCount,
-      budgetsModified: budgetRes.modifiedCount,
       recurringRulesModified: recurringRes.modifiedCount,
+      envelopesModified: envelopeRes.modifiedCount,
     },
     error: null,
   });

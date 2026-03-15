@@ -1,23 +1,107 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { connectDB } from '../lib/mongodb';
-import Budget from '../models/Budget';
+import Envelope from '../models/Envelope';
 import Transaction from '../models/Transaction';
 import type { BudgetInput, BudgetUpdateInput, Category } from '../schemas';
 import { createAuditLog } from '../lib/audit';
 
+async function upsertEnvelopeLimit(input: {
+  userId: mongoose.Types.ObjectId;
+  month: string;
+  category: string;
+  monthlyLimit: number;
+}): Promise<void> {
+  let env = await Envelope.findOne({ userId: input.userId, month: input.month });
+  if (!env) {
+    env = await Envelope.create({
+      userId: input.userId,
+      month: input.month,
+      envelopes: [],
+      surplusAmount: 0,
+      surplusAction: 'pending',
+    });
+  }
+
+  const item = env.envelopes.find((e) => e.category === input.category);
+  if (item) {
+    item.limit = input.monthlyLimit;
+  } else {
+    env.envelopes.push({
+      category: input.category,
+      limit: input.monthlyLimit,
+      spent: 0,
+      status: 'under',
+    });
+  }
+
+  await env.save();
+}
+
+async function deleteEnvelopeLimit(input: {
+  userId: mongoose.Types.ObjectId;
+  month: string;
+  category: string;
+}): Promise<void> {
+  const env = await Envelope.findOne({ userId: input.userId, month: input.month });
+  if (!env) return;
+  env.envelopes = env.envelopes.filter((e) => e.category !== input.category);
+  await env.save();
+}
+
+type BudgetAlias = {
+  _id: string;
+  userId: string;
+  category: Category;
+  monthlyLimit: number;
+  month: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function toBudgetAlias(env: {
+  userId: mongoose.Types.ObjectId;
+  month: string;
+  createdAt: Date;
+  updatedAt: Date;
+}, item: { _id?: mongoose.Types.ObjectId; category: string; limit: number }): BudgetAlias {
+  return {
+    _id: item._id?.toString() ?? '',
+    userId: env.userId.toString(),
+    category: item.category as Category,
+    monthlyLimit: item.limit,
+    month: env.month,
+    createdAt: env.createdAt,
+    updatedAt: env.updatedAt,
+  };
+}
+
+async function findEnvelopeItemById(userId: mongoose.Types.ObjectId, itemId: string) {
+  const env = await Envelope.findOne({ userId, 'envelopes._id': itemId });
+  if (!env) return null;
+  const item = env.envelopes.find((e) => e._id?.toString() === itemId);
+  if (!item) return null;
+  return { env, item };
+}
+
 export async function listBudgets(req: Request, res: Response) {
   await connectDB();
 
-  const userId = req.user!.userId;
+  const userId = new mongoose.Types.ObjectId(req.user!.userId);
   const month = req.query.month as string | undefined;
 
   const filter: Record<string, unknown> = { userId };
-  if (month) {
-    filter.month = month;
+  if (month) filter.month = month;
+
+  const envs = await Envelope.find(filter).sort({ month: -1 }).lean();
+  const budgets: BudgetAlias[] = [];
+  for (const env of envs) {
+    for (const item of env.envelopes) {
+      budgets.push(toBudgetAlias(env, item));
+    }
   }
 
-  const budgets = await Budget.find(filter).sort({ category: 1 }).lean();
+  budgets.sort((a, b) => a.category.localeCompare(b.category));
 
   return res.status(200).json({
     data: budgets,
@@ -28,10 +112,10 @@ export async function listBudgets(req: Request, res: Response) {
 export async function getBudget(req: Request, res: Response) {
   await connectDB();
 
-  const userId = req.user!.userId;
-  const budget = await Budget.findOne({ _id: req.params.id, userId }).lean();
+  const userId = new mongoose.Types.ObjectId(req.user!.userId);
+  const found = await findEnvelopeItemById(userId, req.params.id);
 
-  if (!budget) {
+  if (!found) {
     return res.status(404).json({
       data: null,
       error: 'Budget not found',
@@ -42,7 +126,7 @@ export async function getBudget(req: Request, res: Response) {
   }
 
   return res.status(200).json({
-    data: budget,
+    data: toBudgetAlias(found.env, found.item),
     error: null,
   });
 }
@@ -51,15 +135,20 @@ export async function createBudget(req: Request, res: Response) {
   await connectDB();
 
   const body = req.body as BudgetInput;
-  const userId = req.user!.userId;
+  const userId = new mongoose.Types.ObjectId(req.user!.userId);
 
-  // Check if budget already exists for this category + month
-  const existing = await Budget.findOne({
-    userId,
-    category: body.category,
-    month: body.month,
-  });
+  let env = await Envelope.findOne({ userId, month: body.month });
+  if (!env) {
+    env = await Envelope.create({
+      userId,
+      month: body.month,
+      envelopes: [],
+      surplusAmount: 0,
+      surplusAction: 'pending',
+    });
+  }
 
+  const existing = env.envelopes.find((e) => e.category === body.category);
   if (existing) {
     return res.status(409).json({
       data: null,
@@ -70,19 +159,36 @@ export async function createBudget(req: Request, res: Response) {
     });
   }
 
-  const budget = await Budget.create({ ...body, userId });
+  env.envelopes.push({
+    category: body.category,
+    limit: body.monthlyLimit,
+    spent: 0,
+    status: 'under',
+  });
+  await env.save();
+
+  const createdItem = env.envelopes.find((e) => e.category === body.category);
+  if (!createdItem) {
+    return res.status(500).json({
+      data: null,
+      error: 'Failed to create budget',
+      errorCode: 'BUDGET_CREATE_FAILED',
+      suggestion: 'Please try again.',
+      requestId: req.requestId,
+    });
+  }
 
   createAuditLog({
-    userId,
+    userId: userId.toString(),
     action: 'CREATE',
     resource: 'budget',
-    resourceId: budget._id.toString(),
-    after: budget.toObject() as unknown as Record<string, unknown>,
+    resourceId: createdItem._id?.toString() ?? '',
+    after: toBudgetAlias(env, createdItem) as unknown as Record<string, unknown>,
     req,
   });
 
   return res.status(201).json({
-    data: budget,
+    data: toBudgetAlias(env, createdItem),
     error: null,
     message: 'Budget created',
   });
@@ -92,17 +198,9 @@ export async function updateBudget(req: Request, res: Response) {
   await connectDB();
 
   const body = req.body as BudgetUpdateInput;
-  const userId = req.user!.userId;
-
-  const before = await Budget.findOne({ _id: req.params.id, userId }).lean();
-
-  const updated = await Budget.findOneAndUpdate(
-    { _id: req.params.id, userId },
-    body,
-    { new: true, runValidators: true },
-  ).lean();
-
-  if (!updated) {
+  const userId = new mongoose.Types.ObjectId(req.user!.userId);
+  const found = await findEnvelopeItemById(userId, req.params.id);
+  if (!found) {
     return res.status(404).json({
       data: null,
       error: 'Budget not found',
@@ -112,13 +210,21 @@ export async function updateBudget(req: Request, res: Response) {
     });
   }
 
+  const before = toBudgetAlias(found.env, found.item);
+  if (body.monthlyLimit !== undefined) {
+    found.item.limit = body.monthlyLimit;
+  }
+  await found.env.save();
+
+  const updated = toBudgetAlias(found.env, found.item);
+
   createAuditLog({
-    userId,
+    userId: userId.toString(),
     action: 'UPDATE',
     resource: 'budget',
-    resourceId: updated._id.toString(),
+    resourceId: updated._id,
     before: before ?? undefined,
-    after: updated as Record<string, unknown>,
+    after: updated as unknown as Record<string, unknown>,
     req,
   });
 
@@ -131,11 +237,9 @@ export async function updateBudget(req: Request, res: Response) {
 export async function deleteBudget(req: Request, res: Response) {
   await connectDB();
 
-  const userId = req.user!.userId;
-
-  const deleted = await Budget.findOneAndDelete({ _id: req.params.id, userId }).lean();
-
-  if (!deleted) {
+  const userId = new mongoose.Types.ObjectId(req.user!.userId);
+  const found = await findEnvelopeItemById(userId, req.params.id);
+  if (!found) {
     return res.status(404).json({
       data: null,
       error: 'Budget not found',
@@ -145,12 +249,16 @@ export async function deleteBudget(req: Request, res: Response) {
     });
   }
 
+  const before = toBudgetAlias(found.env, found.item);
+  found.env.envelopes = found.env.envelopes.filter((e) => e._id?.toString() !== req.params.id);
+  await found.env.save();
+
   createAuditLog({
-    userId,
+    userId: userId.toString(),
     action: 'DELETE',
     resource: 'budget',
-    resourceId: deleted._id.toString(),
-    before: deleted as Record<string, unknown>,
+    resourceId: before._id,
+    before: before as unknown as Record<string, unknown>,
     req,
   });
 
@@ -183,7 +291,11 @@ export async function getBudgetStats(req: Request, res: Response) {
   const lastDay = new Date(year, monthNum, 0).getDate();
   const monthEndKey = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-  const budgets = await Budget.find({ userId: req.user!.userId, month }).lean();
+  const env = await Envelope.findOne({ userId, month }).lean();
+  const budgets = (env?.envelopes ?? []).map((e) => ({
+    category: e.category,
+    monthlyLimit: e.limit,
+  }));
 
   const spending = await Transaction.aggregate([
     {

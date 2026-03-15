@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import request from 'supertest';
 
 import app from '../src/index';
-import RecurringRule from '../src/models/RecurringRule';
+import RecurringTransaction from '../src/models/RecurringTransaction';
 import Transaction from '../src/models/Transaction';
 import {
   authHeaders,
@@ -46,7 +46,7 @@ describe('recurring rules API', () => {
     });
 
     it('returns all rules sorted by nextDue', async () => {
-      await RecurringRule.create([
+      await RecurringTransaction.create([
         {
           name: 'Monthly Rent',
           particulars: 'Rent payment',
@@ -56,8 +56,9 @@ describe('recurring rules API', () => {
           frequency: 'monthly',
           dayOfMonth: 1,
           startDate: new Date('2026-01-01'),
-          nextDue: new Date('2026-04-01'),
-          isActive: true,
+          nextDueDate: new Date('2026-04-01'),
+          status: 'active',
+          autoGenerate: true,
           userId: TEST_USER_ID,
         },
         {
@@ -69,8 +70,9 @@ describe('recurring rules API', () => {
           frequency: 'weekly',
           dayOfWeek: 0,
           startDate: new Date('2026-01-01'),
-          nextDue: new Date('2026-03-15'),
-          isActive: true,
+          nextDueDate: new Date('2026-03-15'),
+          status: 'active',
+          autoGenerate: true,
           userId: TEST_USER_ID,
         },
       ]);
@@ -106,6 +108,7 @@ describe('recurring rules API', () => {
       expect(res.body.data.name).toBe('Monthly Rent');
       expect(res.body.data.frequency).toBe('monthly');
       expect(res.body.data.nextDue).toBeDefined();
+      expect(res.body.data.isActive).toBe(true);
     });
 
     it('creates a weekly recurring rule', async () => {
@@ -142,7 +145,7 @@ describe('recurring rules API', () => {
 
   describe('get rule', () => {
     it('returns a rule by id', async () => {
-      const rule = await RecurringRule.create({
+      const rule = await RecurringTransaction.create({
         name: 'Monthly Rent',
         particulars: 'Rent payment',
         amount: 10000,
@@ -151,8 +154,9 @@ describe('recurring rules API', () => {
         frequency: 'monthly',
         dayOfMonth: 1,
         startDate: new Date('2026-01-01'),
-        nextDue: new Date('2026-04-01'),
-        isActive: true,
+        nextDueDate: new Date('2026-04-01'),
+        status: 'active',
+        autoGenerate: true,
         userId: TEST_USER_ID,
       });
 
@@ -176,7 +180,7 @@ describe('recurring rules API', () => {
 
   describe('update rule', () => {
     it('updates a rule', async () => {
-      const rule = await RecurringRule.create({
+      const rule = await RecurringTransaction.create({
         name: 'Monthly Rent',
         particulars: 'Rent payment',
         amount: 10000,
@@ -185,8 +189,9 @@ describe('recurring rules API', () => {
         frequency: 'monthly',
         dayOfMonth: 1,
         startDate: new Date('2026-01-01'),
-        nextDue: new Date('2026-04-01'),
-        isActive: true,
+        nextDueDate: new Date('2026-04-01'),
+        status: 'active',
+        autoGenerate: true,
         userId: TEST_USER_ID,
       });
 
@@ -200,7 +205,7 @@ describe('recurring rules API', () => {
     });
 
     it('deactivates a rule', async () => {
-      const rule = await RecurringRule.create({
+      const rule = await RecurringTransaction.create({
         name: 'Monthly Rent',
         particulars: 'Rent payment',
         amount: 10000,
@@ -209,8 +214,9 @@ describe('recurring rules API', () => {
         frequency: 'monthly',
         dayOfMonth: 1,
         startDate: new Date('2026-01-01'),
-        nextDue: new Date('2026-04-01'),
-        isActive: true,
+        nextDueDate: new Date('2026-04-01'),
+        status: 'active',
+        autoGenerate: true,
         userId: TEST_USER_ID,
       });
 
@@ -226,7 +232,7 @@ describe('recurring rules API', () => {
 
   describe('delete rule', () => {
     it('deletes a rule', async () => {
-      const rule = await RecurringRule.create({
+      const rule = await RecurringTransaction.create({
         name: 'Monthly Rent',
         particulars: 'Rent payment',
         amount: 10000,
@@ -235,8 +241,9 @@ describe('recurring rules API', () => {
         frequency: 'monthly',
         dayOfMonth: 1,
         startDate: new Date('2026-01-01'),
-        nextDue: new Date('2026-04-01'),
-        isActive: true,
+        nextDueDate: new Date('2026-04-01'),
+        status: 'active',
+        autoGenerate: true,
         userId: TEST_USER_ID,
       });
 
@@ -247,8 +254,8 @@ describe('recurring rules API', () => {
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Recurring rule deleted');
 
-      const found = await RecurringRule.findById(rule._id);
-      expect(found).toBeNull();
+      const found = await RecurringTransaction.findById(rule._id);
+      expect(found?.status).toBe('ended');
     });
 
     it('returns 404 for non-existent rule', async () => {
@@ -304,7 +311,7 @@ describe('recurring rules API', () => {
 
   describe('run rules', () => {
     it('dry run returns preview without creating transactions', async () => {
-      await RecurringRule.create({
+      await RecurringTransaction.create({
         name: 'Monthly Rent',
         particulars: 'Rent payment',
         amount: 10000,
@@ -313,8 +320,9 @@ describe('recurring rules API', () => {
         frequency: 'monthly',
         dayOfMonth: 1,
         startDate: new Date('2020-01-01'),
-        nextDue: new Date('2026-03-01'),
-        isActive: true,
+        nextDueDate: new Date('2026-03-01'),
+        status: 'active',
+        autoGenerate: true,
         userId: TEST_USER_ID,
       });
 
@@ -334,7 +342,7 @@ describe('recurring rules API', () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      await RecurringRule.create({
+      await RecurringTransaction.create({
         name: 'Monthly Rent',
         particulars: 'Rent payment',
         amount: 10000,
@@ -343,8 +351,9 @@ describe('recurring rules API', () => {
         frequency: 'monthly',
         dayOfMonth: 1,
         startDate: new Date('2020-01-01'),
-        nextDue: today,
-        isActive: true,
+        nextDueDate: today,
+        status: 'active',
+        autoGenerate: true,
         userId: TEST_USER_ID,
       });
 

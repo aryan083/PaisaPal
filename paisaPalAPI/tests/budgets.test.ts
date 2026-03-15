@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import request from 'supertest';
 
 import app from '../src/index';
-import Budget from '../src/models/Budget';
+import Envelope from '../src/models/Envelope';
 import Transaction from '../src/models/Transaction';
 import {
   authHeaders,
@@ -46,18 +46,16 @@ describe('budgets API', () => {
     });
 
     it('returns budgets filtered by month', async () => {
-      await Budget.create([
+      await Envelope.create([
         {
-          category: 'Food & Drinks',
-          monthlyLimit: 5000,
           month: '2026-03',
           userId: TEST_USER_ID,
+          envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
         },
         {
-          category: 'Shopping',
-          monthlyLimit: 3000,
           month: '2026-04',
           userId: TEST_USER_ID,
+          envelopes: [{ category: 'Shopping', limit: 3000, spent: 0, status: 'under' }],
         },
       ]);
 
@@ -88,11 +86,10 @@ describe('budgets API', () => {
     });
 
     it('rejects duplicate budget for same category and month', async () => {
-      await Budget.create({
-        category: 'Food & Drinks',
-        monthlyLimit: 5000,
+      await Envelope.create({
         month: '2026-03',
         userId: TEST_USER_ID,
+        envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
       const res = await request(app)
@@ -124,15 +121,16 @@ describe('budgets API', () => {
 
   describe('get budget', () => {
     it('returns a budget by id', async () => {
-      const budget = await Budget.create({
-        category: 'Food & Drinks',
-        monthlyLimit: 5000,
+      const env = await Envelope.create({
         month: '2026-03',
         userId: TEST_USER_ID,
+        envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
+      const budgetId = env.envelopes[0]!._id.toString();
+
       const res = await request(app)
-        .get(`/api/budgets/${budget._id}`)
+        .get(`/api/budgets/${budgetId}`)
         .set(authHeaders(token));
 
       expect(res.status).toBe(200);
@@ -150,15 +148,16 @@ describe('budgets API', () => {
 
   describe('update budget', () => {
     it('updates budget limit', async () => {
-      const budget = await Budget.create({
-        category: 'Food & Drinks',
-        monthlyLimit: 5000,
+      const env = await Envelope.create({
         month: '2026-03',
         userId: TEST_USER_ID,
+        envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
+      const budgetId = env.envelopes[0]!._id.toString();
+
       const res = await request(app)
-        .put(`/api/budgets/${budget._id}`)
+        .put(`/api/budgets/${budgetId}`)
         .set(authHeaders(token))
         .send({ monthlyLimit: 6000 });
 
@@ -169,15 +168,16 @@ describe('budgets API', () => {
 
   describe('delete budget', () => {
     it('deletes a budget', async () => {
-      const budget = await Budget.create({
-        category: 'Food & Drinks',
-        monthlyLimit: 5000,
+      const env = await Envelope.create({
         month: '2026-03',
         userId: TEST_USER_ID,
+        envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
+      const budgetId = env.envelopes[0]!._id.toString();
+
       const res = await request(app)
-        .delete(`/api/budgets/${budget._id}`)
+        .delete(`/api/budgets/${budgetId}`)
         .set(authHeaders(token));
 
       expect(res.status).toBe(200);
@@ -187,20 +187,14 @@ describe('budgets API', () => {
 
   describe('budget stats', () => {
     it('returns budget stats with spending', async () => {
-      await Budget.create([
-        {
-          category: 'Food & Drinks',
-          monthlyLimit: 5000,
-          month: '2026-03',
-          userId: TEST_USER_ID,
-        },
-        {
-          category: 'Shopping',
-          monthlyLimit: 3000,
-          month: '2026-03',
-          userId: TEST_USER_ID,
-        },
-      ]);
+      await Envelope.create({
+        month: '2026-03',
+        userId: TEST_USER_ID,
+        envelopes: [
+          { category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' },
+          { category: 'Shopping', limit: 3000, spent: 0, status: 'under' },
+        ],
+      });
 
       await Transaction.create([
         {
@@ -248,11 +242,10 @@ describe('budgets API', () => {
     });
 
     it('detects over-budget categories', async () => {
-      await Budget.create({
-        category: 'Food & Drinks',
-        monthlyLimit: 100,
+      await Envelope.create({
         month: '2026-03',
         userId: TEST_USER_ID,
+        envelopes: [{ category: 'Food & Drinks', limit: 100, spent: 0, status: 'under' }],
       });
 
       await Transaction.create({

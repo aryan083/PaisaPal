@@ -58,6 +58,24 @@ export const ModeSchema = z.enum(['Online', 'Cash', 'Card']);
 
 export const FrequencySchema = z.enum(['daily', 'weekly', 'monthly', 'yearly']);
 
+export const RecurringTransactionFrequencySchema = z.enum([
+  'daily',
+  'weekly',
+  'biweekly',
+  'monthly',
+  'yearly',
+]);
+
+export const SavingsGoalStatusSchema = z.enum(['active', 'completed', 'paused', 'ended']);
+
+export const RecurringTransactionStatusSchema = z.enum(['active', 'paused', 'ended']);
+
+export const ContributionTypeSchema = z.enum(['manual', 'surplus', 'rapido_tax', 'auto']);
+
+export const EnvelopeStatusSchema = z.enum(['under', 'warning', 'over']);
+
+export const SurplusActionSchema = z.enum(['save', 'split', 'carry', 'pending']);
+
 export const TransactionSchema = z.object({
   date: DDMMYYYYDateSchema,
   particulars: z.string().min(1).max(200),
@@ -119,6 +137,11 @@ export const SettingsSchema = z.object({
       }),
     )
     .optional(),
+  rapidoTaxEnabled: z.boolean().optional(),
+  rapidoTaxPercent: z.number().min(5).max(25).optional(),
+  primarySavingsGoalId: z.string().min(1).optional(),
+  monthEndReminderEnabled: z.boolean().optional(),
+  envelopeWarningThreshold: z.number().min(50).max(95).optional(),
 });
 
 export type SettingsInput = z.infer<typeof SettingsSchema>;
@@ -184,3 +207,117 @@ export const BudgetUpdateSchema = z.object({
 });
 
 export type BudgetUpdateInput = z.infer<typeof BudgetUpdateSchema>;
+
+export const SavingsGoalCreateSchema = z.object({
+  name: z.string().min(1).max(100),
+  emoji: z.string().optional().default('🎯'),
+  targetAmount: z.number().min(1),
+  deadline: DDMMYYYYDateSchema.optional(),
+  color: z.string().regex(/^#([0-9a-fA-F]{6})$/).optional(),
+});
+
+export type SavingsGoalCreateInput = z.infer<typeof SavingsGoalCreateSchema>;
+
+export const SavingsGoalUpdateSchema = SavingsGoalCreateSchema.partial().superRefine(
+  (value: Partial<SavingsGoalCreateInput>, ctx: z.RefinementCtx) => {
+    const hasAtLeastOne = Object.keys(value).length > 0;
+    if (!hasAtLeastOne) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one field must be provided',
+      });
+    }
+  },
+);
+
+export type SavingsGoalUpdateInput = z.infer<typeof SavingsGoalUpdateSchema>;
+
+export const SavingsContributionCreateSchema = z.object({
+  amount: z.number().min(0),
+  type: ContributionTypeSchema,
+  note: z.string().max(500).optional(),
+});
+
+export type SavingsContributionCreateInput = z.infer<
+  typeof SavingsContributionCreateSchema
+>;
+
+export const RecurringTransactionCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  amount: z.number().min(0),
+  category: CategorySchema,
+  mode: z.enum(['Online', 'Cash']).default('Online'),
+  notes: z.string().max(500).optional(),
+  frequency: RecurringTransactionFrequencySchema,
+  startDate: DDMMYYYYDateSchema,
+  endDate: DDMMYYYYDateSchema.optional(),
+});
+
+export type RecurringTransactionCreateInput = z.infer<
+  typeof RecurringTransactionCreateSchema
+>;
+
+export const RecurringTransactionUpdateSchema =
+  RecurringTransactionCreateSchema.partial().superRefine(
+    (value: Partial<RecurringTransactionCreateInput>, ctx: z.RefinementCtx) => {
+      const hasAtLeastOne = Object.keys(value).length > 0;
+      if (!hasAtLeastOne) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'At least one field must be provided',
+        });
+      }
+    },
+  );
+
+export type RecurringTransactionUpdateInput = z.infer<
+  typeof RecurringTransactionUpdateSchema
+>;
+
+export const RecurringMarkPaidSchema = z.object({
+  date: DDMMYYYYDateSchema.optional(),
+  amount: z.number().min(0).optional(),
+});
+
+export type RecurringMarkPaidInput = z.infer<typeof RecurringMarkPaidSchema>;
+
+export const EnvelopeItemInputSchema = z.object({
+  category: CategorySchema,
+  limit: z.number().min(0),
+});
+
+export const EnvelopeCreateSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format'),
+  envelopes: z.array(EnvelopeItemInputSchema).max(50),
+});
+
+export type EnvelopeCreateInput = z.infer<typeof EnvelopeCreateSchema>;
+
+export const EnvelopeUpdateSchema = z.object({
+  envelopes: z.array(EnvelopeItemInputSchema).max(50),
+});
+
+export type EnvelopeUpdateInput = z.infer<typeof EnvelopeUpdateSchema>;
+
+export const EnvelopeSurplusSchema = z.object({
+  action: z.enum(['save', 'split', 'carry']),
+  goalId: z.string().min(1).optional(),
+});
+
+export type EnvelopeSurplusInput = z.infer<typeof EnvelopeSurplusSchema>;
+
+export const DetectedRecurringSchema = z.object({
+  name: z.string().min(1).max(200),
+  amount: z.number().min(0),
+  category: CategorySchema,
+  frequency: RecurringTransactionFrequencySchema,
+  suggestedNextDate: DDMMYYYYDateSchema,
+});
+
+export const ConfirmDetectedRecurringSchema = z.object({
+  suggestions: z.array(DetectedRecurringSchema).min(1).max(100),
+});
+
+export type ConfirmDetectedRecurringInput = z.infer<
+  typeof ConfirmDetectedRecurringSchema
+>;

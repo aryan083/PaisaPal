@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getStats } from '../controllers/stats';
+import { getSavingsStats } from '../controllers/savingsStats';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 
@@ -8,5 +9,6 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', asyncHandler(getStats));
+router.get('/savings', asyncHandler(getSavingsStats));
 
 export default router;
