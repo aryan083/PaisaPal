@@ -97,7 +97,7 @@ export const useStore = create<AppStore>((set, get) => ({
   savingsStats: null,
   activeTab: 'dashboard',
   theme: (localStorage.getItem('paisa-theme') as 'dark' | 'light') || 'dark',
-  sidebarCollapsed: false,
+  sidebarCollapsed: localStorage.getItem('paisa-sidebar-collapsed') === 'true',
   formOpen: false,
   editingTransaction: null,
   isLoading: false,
@@ -201,8 +201,15 @@ export const useStore = create<AppStore>((set, get) => ({
     set({ theme: t })
   },
 
-  setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
-  toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setSidebarCollapsed: (v) => {
+    localStorage.setItem('paisa-sidebar-collapsed', String(v))
+    set({ sidebarCollapsed: v })
+  },
+  toggleSidebarCollapsed: () => {
+    const next = !get().sidebarCollapsed
+    localStorage.setItem('paisa-sidebar-collapsed', String(next))
+    set({ sidebarCollapsed: next })
+  },
 
   openForm: (tx) => set({ formOpen: true, editingTransaction: tx || null }),
   closeForm: () => set({ formOpen: false, editingTransaction: null }),
