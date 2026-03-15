@@ -149,8 +149,12 @@ export async function deleteSavingsGoal(req: Request, res: Response) {
   }
 
   const before = goal.toObject() as unknown as Record<string, unknown>;
-  goal.status = 'ended';
-  await goal.save();
+
+  // Delete all contributions for this goal
+  await SavingsContribution.deleteMany({ goalId: goal._id, userId });
+
+  // Actually delete the goal from database (hard delete)
+  await SavingsGoal.deleteOne({ _id: req.params.id, userId });
 
   createAuditLog({
     userId,
@@ -158,7 +162,6 @@ export async function deleteSavingsGoal(req: Request, res: Response) {
     resource: 'savings_goal',
     resourceId: goal._id.toString(),
     before,
-    after: goal.toObject() as unknown as Record<string, unknown>,
     req,
   });
 

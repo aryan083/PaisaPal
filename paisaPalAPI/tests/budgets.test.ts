@@ -127,7 +127,9 @@ describe('budgets API', () => {
         envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
-      const budgetId = env.envelopes[0]!._id.toString();
+      const firstEnvelope = env.envelopes[0];
+      if (!firstEnvelope) throw new Error('No envelope created');
+      const budgetId = firstEnvelope._id?.toString();
 
       const res = await request(app)
         .get(`/api/budgets/${budgetId}`)
@@ -154,7 +156,9 @@ describe('budgets API', () => {
         envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
-      const budgetId = env.envelopes[0]!._id.toString();
+      const firstEnvelope = env.envelopes[0];
+      if (!firstEnvelope) throw new Error('No envelope created');
+      const budgetId = firstEnvelope._id?.toString();
 
       const res = await request(app)
         .put(`/api/budgets/${budgetId}`)
@@ -174,7 +178,9 @@ describe('budgets API', () => {
         envelopes: [{ category: 'Food & Drinks', limit: 5000, spent: 0, status: 'under' }],
       });
 
-      const budgetId = env.envelopes[0]!._id.toString();
+      const firstEnvelope = env.envelopes[0];
+      if (!firstEnvelope) throw new Error('No envelope created');
+      const budgetId = firstEnvelope._id?.toString();
 
       const res = await request(app)
         .delete(`/api/budgets/${budgetId}`)

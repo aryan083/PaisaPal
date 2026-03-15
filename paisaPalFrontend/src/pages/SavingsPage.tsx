@@ -1,16 +1,26 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { PiggyBank, Plus, History } from 'lucide-react'
+import { PiggyBank, Plus, History, Trash2 } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { formatCurrency } from '@/lib/utils'
 import { useSavingsGoals } from '@/hooks/useSavingsGoals'
 import { useSavingsStats } from '@/hooks/useSavingsStats'
 import { cn } from '@/lib/utils'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 const PRESET_COLORS = ['#22d47a', '#4da6ff', '#ff4f6a', '#b06aff', '#ffaa2b', '#6080a0']
 
 export function SavingsPage() {
-  const { goals, loading, create, contribute, history } = useSavingsGoals()
+  const { goals, loading, create, contribute, history, remove } = useSavingsGoals()
   const { stats } = useSavingsStats()
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -44,6 +54,11 @@ export function SavingsPage() {
   )
 
   const [historyItems, setHistoryItems] = useState<Array<{ id: string; label: string }>>([])
+
+  const [deleteOpen, setDeleteOpen] = useState<{ open: boolean; goalId: string | null }>({
+    open: false,
+    goalId: null,
+  })
 
   const openHistory = async (goalId: string) => {
     setHistoryOpen({ open: true, goalId })
@@ -173,6 +188,13 @@ export function SavingsPage() {
                 >
                   <History className="h-4 w-4" />
                   History
+                </button>
+                <button
+                  onClick={() => setDeleteOpen({ open: true, goalId: g._id })}
+                  className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500 inline-flex items-center gap-2"
+                  aria-label="Delete goal"
+                >
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -322,6 +344,31 @@ export function SavingsPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={deleteOpen.open} onOpenChange={(v) => setDeleteOpen({ open: v, goalId: v ? deleteOpen.goalId : null })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Savings Goal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this goal and all its contribution history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteOpen({ open: false, goalId: null })}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteOpen.goalId) {
+                  void remove(deleteOpen.goalId)
+                }
+                setDeleteOpen({ open: false, goalId: null })
+              }}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }
