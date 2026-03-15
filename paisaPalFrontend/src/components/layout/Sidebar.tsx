@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useStore } from '@/store'
 import { useAuthStore } from '@/stores/authStore'
 import { LayoutDashboard, Receipt, TrendingUp, Settings, Moon, Sun, Repeat, Wallet, LogOut, User, ChevronLeft, ChevronRight, Menu, PiggyBank, RefreshCw } from 'lucide-react'
@@ -16,9 +15,17 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
 ]
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, theme, setTheme, isSnapshotView } = useStore()
+  const {
+    activeTab,
+    setActiveTab,
+    theme,
+    setTheme,
+    isSnapshotView,
+    sidebarCollapsed,
+    toggleSidebarCollapsed,
+  } = useStore()
   const { user, logout } = useAuthStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const collapsed = sidebarCollapsed
 
   const navItems = isSnapshotView
     ? NAV_ITEMS.filter(i => i.id === 'dashboard' || i.id === 'transactions' || i.id === 'envelopes')
@@ -40,7 +47,7 @@ export function Sidebar() {
           )}
         </div>
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleSidebarCollapsed}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
         >

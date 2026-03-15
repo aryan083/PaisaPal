@@ -38,6 +38,7 @@ interface AppStore {
   savingsStats: SavingsStats | null
   activeTab: TabId
   theme: 'dark' | 'light'
+  sidebarCollapsed: boolean
   formOpen: boolean
   editingTransaction: Transaction | null
   isLoading: boolean
@@ -55,6 +56,8 @@ interface AppStore {
   setSnapshotView: (v: boolean) => void
   setActiveTab: (tab: TabId) => void
   setTheme: (t: 'dark' | 'light') => void
+  setSidebarCollapsed: (v: boolean) => void
+  toggleSidebarCollapsed: () => void
   openForm: (tx?: Transaction) => void
   closeForm: () => void
   addTransaction: (
@@ -94,6 +97,7 @@ export const useStore = create<AppStore>((set, get) => ({
   savingsStats: null,
   activeTab: 'dashboard',
   theme: (localStorage.getItem('paisa-theme') as 'dark' | 'light') || 'dark',
+  sidebarCollapsed: false,
   formOpen: false,
   editingTransaction: null,
   isLoading: false,
@@ -196,6 +200,9 @@ export const useStore = create<AppStore>((set, get) => ({
     document.documentElement.setAttribute('data-theme', t)
     set({ theme: t })
   },
+
+  setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+  toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
   openForm: (tx) => set({ formOpen: true, editingTransaction: tx || null }),
   closeForm: () => set({ formOpen: false, editingTransaction: null }),
