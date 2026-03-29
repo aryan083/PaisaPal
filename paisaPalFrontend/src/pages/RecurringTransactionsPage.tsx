@@ -43,7 +43,7 @@ export function RecurringTransactionsPage() {
   const summary = useMemo(() => {
     const monthly = items.reduce((s, r) => s + (r.projectedMonthly ?? 0), 0)
     const yearly = items.reduce((s, r) => s + (r.projectedYearly ?? 0), 0)
-    const dueSoon = items.filter((r) => r.daysUntilDue <= 7).length
+    const dueSoon = items.filter((r) => (r.daysUntilDue ?? Infinity) <= 7).length
     return { monthly, yearly, dueSoon }
   }, [items])
 
@@ -174,9 +174,9 @@ export function RecurringTransactionsPage() {
 
       <div className="space-y-3">
         {items.map((r) => {
-          const due = r.daysUntilDue
+          const due = r.daysUntilDue ?? Infinity
           const border = due < 0 ? 'border-l-red-500' : due <= 7 ? 'border-l-yellow-500' : 'border-l-transparent'
-          const badge = due < 0 ? 'Overdue' : due <= 7 ? 'Due soon' : `${due} days`
+          const badge = due < 0 ? 'Overdue' : due <= 7 ? 'Due soon' : Number.isFinite(due) ? `${due} days` : '—'
           return (
             <div key={r._id} className={cn('card-base p-5 border-l-4', border)}>
               <div className="flex items-start justify-between gap-3">

@@ -5,8 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`
+export function formatCurrency(amount: number | undefined | null): string {
+  const safe = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0
+  return `₹${safe.toLocaleString('en-IN')}`
 }
 
 export function parseLocalDate(dateStr: string): Date {
@@ -44,7 +45,8 @@ export function getWeekdayShort(dateStr: string): string {
   return d.toLocaleDateString('en-IN', { weekday: 'short' })
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '—'
   const d = parseLocalDate(dateStr)
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
