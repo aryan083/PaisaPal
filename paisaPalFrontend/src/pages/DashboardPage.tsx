@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useStore } from '@/store'
 
@@ -37,12 +37,27 @@ export function DashboardPage() {
   const [dayFilter, setDayFilter] = useState<DayFilter>('all')
   const [selectedCategories, setSelectedCategories] = useState<Category[]>(() => [...categories])
 
+  const prevCategoriesRef = useRef<Category[]>(categories)
+
   useEffect(() => {
+    const prevCategories = prevCategoriesRef.current
+
     setSelectedCategories(prev => {
       const allowed = new Set(categories)
-      const next = prev.filter(c => allowed.has(c))
-      return next.length > 0 ? next : [...categories]
+      const cleanedPrev = prev.filter(c => allowed.has(c))
+
+      // If user previously had all categories selected, keep it as "all" even when
+      // new categories are loaded (e.g. settings/custom categories on first load).
+      const prevWasAllSelected =
+        prevCategories.length > 0 &&
+        cleanedPrev.length === prevCategories.length &&
+        prevCategories.every(c => cleanedPrev.includes(c))
+
+      if (prevWasAllSelected) return [...categories]
+      return cleanedPrev.length > 0 ? cleanedPrev : [...categories]
     })
+
+    prevCategoriesRef.current = categories
   }, [categories])
 
   const filteredTxs = useMemo(() => {
