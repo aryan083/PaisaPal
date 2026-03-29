@@ -30,6 +30,7 @@ import { useSyncStore } from '@/stores/syncStore'
 
 interface AppStore {
   transactions: Transaction[]
+  transactionRevision: number
   settings: Settings
   stats: Stats | null
   savingsGoals: SavingsGoal[]
@@ -89,13 +90,14 @@ interface AppStore {
 
 export const useStore = create<AppStore>((set, get) => ({
   transactions: [],
+  transactionRevision: 0,
   settings: { stipend: 12000, extra: 0, categoryConfig: [] },
   stats: null,
   savingsGoals: [],
   recurringTransactions: [],
   envelopes: null,
   savingsStats: null,
-  activeTab: 'dashboard',
+  activeTab: (localStorage.getItem('paisa-active-tab') as TabId) || 'dashboard',
   theme: (localStorage.getItem('paisa-theme') as 'dark' | 'light') || 'dark',
   sidebarCollapsed: localStorage.getItem('paisa-sidebar-collapsed') === 'true',
   formOpen: false,
@@ -193,7 +195,10 @@ export const useStore = create<AppStore>((set, get) => ({
 
   setSnapshotView: (v) => set({ isSnapshotView: v }),
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  setActiveTab: (tab) => {
+    localStorage.setItem('paisa-active-tab', tab)
+    set({ activeTab: tab })
+  },
 
   setTheme: (t) => {
     localStorage.setItem('paisa-theme', t)
@@ -236,7 +241,7 @@ export const useStore = create<AppStore>((set, get) => ({
           updatedAt: created.updatedAt,
         }
         const txs = [tx, ...get().transactions]
-        set({ transactions: txs })
+        set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
         await saveTransactions(txs, namespace)
         get().computeStats()
         return
@@ -257,7 +262,7 @@ export const useStore = create<AppStore>((set, get) => ({
       }
 
       const txs = [localTx, ...get().transactions]
-      set({ transactions: txs })
+      set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
       await saveTransactions(txs, namespace)
       get().computeStats()
 
@@ -294,7 +299,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
       const idSet = new Set(ids)
       const txs = get().transactions.filter((t) => !idSet.has(t.id))
-      set({ transactions: txs })
+      set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
       await saveTransactions(txs, namespace)
       get().computeStats()
     } finally {
@@ -327,7 +332,7 @@ export const useStore = create<AppStore>((set, get) => ({
         }))
 
         const txs = [...newTxs, ...get().transactions]
-        set({ transactions: txs })
+        set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
         await saveTransactions(txs, namespace)
         get().computeStats()
         return
@@ -348,7 +353,7 @@ export const useStore = create<AppStore>((set, get) => ({
       }))
 
       const txs = [...newTxs, ...get().transactions]
-      set({ transactions: txs })
+      set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
       await saveTransactions(txs, namespace)
       get().computeStats()
 
@@ -380,7 +385,7 @@ export const useStore = create<AppStore>((set, get) => ({
       const txs = get().transactions.map(tx =>
         tx.category === fromCategory ? { ...tx, category: toCategory } : tx,
       )
-      set({ transactions: txs })
+      set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
 
       await saveTransactions(txs, namespace)
       get().computeStats()
@@ -424,7 +429,7 @@ export const useStore = create<AppStore>((set, get) => ({
               }
             : tx,
         )
-        set({ transactions: txs })
+        set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
         await saveTransactions(txs, namespace)
         get().computeStats()
         return
@@ -433,7 +438,7 @@ export const useStore = create<AppStore>((set, get) => ({
       const txs = get().transactions.map(tx =>
         tx.id === id ? { ...tx, ...data, updatedAt: new Date().toISOString() } : tx,
       )
-      set({ transactions: txs })
+      set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
       await saveTransactions(txs, namespace)
       get().computeStats()
 
@@ -465,7 +470,7 @@ export const useStore = create<AppStore>((set, get) => ({
       }
 
       const txs = get().transactions.filter(tx => tx.id !== id)
-      set({ transactions: txs })
+      set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
       await saveTransactions(txs, namespace)
       get().computeStats()
     } finally {

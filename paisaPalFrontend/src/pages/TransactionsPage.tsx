@@ -17,6 +17,7 @@ export function TransactionsPage() {
   const {
     settings,
     transactions,
+    transactionRevision,
     removeTransaction,
     bulkRemoveTransactions,
     openForm,
@@ -106,6 +107,11 @@ export function TransactionsPage() {
     hasNotes,
     serverSort,
   ])
+
+  useEffect(() => {
+    if (!isOnline || isSnapshotView) return
+    void loadPage(page)
+  }, [isOnline, isSnapshotView, transactionRevision, page])
 
   const goPrevPage = () => {
     if (!effectiveOnline && !isSnapshotView) return
@@ -468,6 +474,16 @@ export function TransactionsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!isSnapshotView && (
+        <button
+          onClick={() => openForm()}
+          aria-label="Add transaction"
+          className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 sm:hidden"
+        >
+          <Plus className="h-4 w-4" /> Add
+        </button>
+      )}
 
       {/* Bulk selection bar */}
       {selectedIds.size > 0 && (

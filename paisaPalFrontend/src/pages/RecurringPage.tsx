@@ -335,7 +335,7 @@ function RuleFormSheet({ open, onClose, rule, onCreate, onUpdate, onPreview, cat
   const [category, setCategory] = useState<Category>('Other')
   const [mode, setMode] = useState<'Online' | 'Cash' | 'Card'>('Online')
   const [notes, setNotes] = useState('')
-  const [frequency, setFrequency] = useState<Frequency>('monthly')
+  const [frequency, setFrequency] = useState<RuleFrequency>('monthly')
   const [dayOfMonth, setDayOfMonth] = useState('1')
   const [dayOfWeek, setDayOfWeek] = useState('0')
   const [startDate, setStartDate] = useState('')
@@ -492,7 +492,7 @@ function RuleFormSheet({ open, onClose, rule, onCreate, onUpdate, onPreview, cat
             <label className="text-sm text-muted-foreground">Frequency</label>
             <select
               value={frequency}
-              onChange={e => setFrequency(e.target.value as Frequency)}
+              onChange={e => setFrequency(e.target.value as RuleFrequency)}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="daily">Daily</option>
