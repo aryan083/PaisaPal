@@ -99,18 +99,28 @@ export async function createEnvelope(req: Request, res: Response) {
   const body = req.body as EnvelopeCreateInput;
   const userId = new mongoose.Types.ObjectId(req.user!.userId);
 
-  const created = await Envelope.create({
-    userId,
-    month: body.month,
-    envelopes: body.envelopes.map((e) => ({
-      category: e.category,
-      limit: e.limit,
-      spent: 0,
-      status: 'under',
-    })),
-    surplusAmount: 0,
-    surplusAction: 'pending',
-  });
+  const settings = await Settings.findOne({ userId }).lean();
+  const threshold = settings?.envelopeWarningThreshold ?? 80;
+
+  // Use upsert to avoid duplicate key errors when getEnvelope has already
+  // auto-created an empty document for this userId + month.
+  const created = await Envelope.findOneAndUpdate(
+    { userId, month: body.month },
+    {
+      $set: {
+        envelopes: body.envelopes.map((e) => ({
+          category: e.category,
+          limit: e.limit,
+          spent: 0,
+          status: getStatus(0, e.limit, threshold),
+        })),
+        surplusAmount: 0,
+        surplusAction: 'pending',
+      },
+      $setOnInsert: { userId, month: body.month },
+    },
+    { upsert: true, new: true, runValidators: true },
+  );
 
   createAuditLog({
     userId: userId.toString(),
@@ -121,7 +131,10 @@ export async function createEnvelope(req: Request, res: Response) {
     req,
   });
 
-  return res.status(201).json({ data: created, error: null });
+  // Sync actual spent values from transactions
+  const synced = await syncSpent(userId, body.month, threshold);
+
+  return res.status(201).json({ data: synced ?? created, error: null });
 }
 
 export async function updateEnvelope(req: Request, res: Response) {

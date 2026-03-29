@@ -52,9 +52,11 @@ export function EnvelopesPage() {
       limit: Math.max(0, Number(limit) || 0),
     }))
 
-    if (!envelope || envelope.envelopes.length === 0) {
+    if (!envelope) {
+      // No document exists yet — create one
       await setup({ month, envelopes: items })
     } else {
+      // Document exists (possibly with 0 items) — update it
       await updateLimits(items)
     }
 
