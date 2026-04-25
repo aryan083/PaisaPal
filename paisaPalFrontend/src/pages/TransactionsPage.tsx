@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
 import { formatCurrency, formatDate, getWeekdayShort } from '@/lib/utils'
 import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode } from '@/types'
-import { Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { BulkImport } from '@/components/transactions/BulkImport'
 import { exportTransactionsCsv, fetchTransactionsPaginated } from '@/lib/api'
@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import { useSyncStore } from '@/stores/syncStore'
 
-type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
+type SortKey = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'particulars-asc' | 'particulars-desc' | 'category-asc' | 'category-desc' | 'mode-asc' | 'mode-desc'
 
 export function TransactionsPage() {
   const {
@@ -26,6 +26,7 @@ export function TransactionsPage() {
   } = useStore()
   const isOnline = useSyncStore(s => s.isOnline)
 
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All')
   const [sort, setSort] = useState<SortKey>('date-desc')
@@ -40,6 +41,7 @@ export function TransactionsPage() {
   const [minAmount, setMinAmount] = useState('')
   const [maxAmount, setMaxAmount] = useState('')
   const [hasNotes, setHasNotes] = useState<'All' | 'yes' | 'no'>('All')
+  const [isFetching, setIsFetching] = useState(false)
 
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(1)
@@ -47,15 +49,41 @@ export function TransactionsPage() {
   const [pageTransactions, setPageTransactions] = useState<typeof transactions>([])
   const limit = 50
 
+  // Debounce search input 350ms
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = (val: string) => {
+    setSearchInput(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setSearch(val)
+      setPage(1)
+    }, 350)
+  }
+
   const serverSort = useMemo(() => {
-    if (sort === 'date-desc') return { sort: 'date', order: 'desc' as const }
-    if (sort === 'date-asc') return { sort: 'date', order: 'asc' as const }
-    if (sort === 'amount-desc') return { sort: 'amount', order: 'desc' as const }
-    return { sort: 'amount', order: 'asc' as const }
+    const [field, dir] = sort.split('-') as [string, string]
+    const validFields = ['date', 'amount', 'particulars', 'category', 'mode']
+    const sortField = validFields.includes(field) ? field : 'date'
+    return { sort: sortField, order: (dir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc' }
   }, [sort])
 
-  const loadPage = async (nextPage: number) => {
-    const res = await fetchTransactionsPaginated({
+  const cycleSort = useCallback((field: string) => {
+    setSort(prev => {
+      const [f, d] = prev.split('-')
+      if (f === field) return `${field}-${d === 'desc' ? 'asc' : 'desc'}` as SortKey
+      return `${field}-desc` as SortKey
+    })
+    setPage(1)
+  }, [])
+
+  const effectiveOnline = isOnline && !isSnapshotView
+
+  // Single effect — fires on any filter/page/sort change; uses AbortController to cancel stale requests
+  useEffect(() => {
+    if (!effectiveOnline) return
+    const controller = new AbortController()
+    setIsFetching(true)
+    fetchTransactionsPaginated({
       search: search || undefined,
       category: categoryFilter !== 'All' ? categoryFilter : undefined,
       mode: modeFilter !== 'All' ? modeFilter : undefined,
@@ -65,66 +93,44 @@ export function TransactionsPage() {
       maxAmount: maxAmount ? parseFloat(maxAmount) : undefined,
       hasNotes: hasNotes !== 'All' ? hasNotes === 'yes' : undefined,
       ...serverSort,
-      page: nextPage,
+      page,
       limit,
+    }).then(res => {
+      if (controller.signal.aborted) return
+      setPageTransactions(res.transactions.map(tx => ({
+        id: tx._id,
+        date: tx.date,
+        dateKey: tx.dateKey,
+        particulars: tx.particulars,
+        amount: tx.amount,
+        category: tx.category as Category,
+        mode: tx.mode as PaymentMode,
+        notes: tx.notes,
+        createdAt: tx.createdAt,
+        updatedAt: tx.updatedAt,
+      })))
+      setTotal(res.total)
+      setPages(Math.max(1, res.pages))
+      setIsFetching(false)
+    }).catch(err => {
+      if (controller.signal.aborted) return
+      const u = getUserError(err, 'Failed to load transactions')
+      toast.error(formatToastMessage(u))
+      setIsFetching(false)
     })
-
-    const next = res.transactions.map(tx => ({
-      id: tx._id,
-      date: tx.date,
-      dateKey: tx.dateKey,
-      particulars: tx.particulars,
-      amount: tx.amount,
-      category: tx.category as Category,
-      mode: tx.mode as PaymentMode,
-      notes: tx.notes,
-      createdAt: tx.createdAt,
-      updatedAt: tx.updatedAt,
-    }))
-
-    setPageTransactions(next)
-    setTotal(res.total)
-    setPages(res.pages)
-    setPage(res.page)
-  }
-
-  useEffect(() => {
-    if (!isOnline || isSnapshotView) return
-    setSelectedIds(new Set())
-    setBulkDeleteConfirm(false)
-    setPage(1)
-    void loadPage(1)
-  }, [
-    isOnline,
-    isSnapshotView,
-    search,
-    categoryFilter,
-    modeFilter,
-    startDate,
-    endDate,
-    minAmount,
-    maxAmount,
-    hasNotes,
-    serverSort,
-  ])
-
-  useEffect(() => {
-    if (!isOnline || isSnapshotView) return
-    void loadPage(page)
-  }, [isOnline, isSnapshotView, transactionRevision, page])
+    return () => controller.abort()
+  }, [effectiveOnline, search, categoryFilter, modeFilter, startDate, endDate, minAmount, maxAmount, hasNotes, serverSort, page, transactionRevision])
 
   const goPrevPage = () => {
-    if (!effectiveOnline && !isSnapshotView) return
     if (page <= 1) return
-    if (isSnapshotView) setPage((p) => Math.max(1, p - 1))
-    else void loadPage(page - 1)
+    if (isSnapshotView) setPage(p => Math.max(1, p - 1))
+    else setPage(p => Math.max(1, p - 1))
   }
 
   const goNextPage = () => {
-    if (!effectiveOnline && !isSnapshotView) return
     if (page >= pages) return
-    if (isSnapshotView) setPage((p) => Math.min(pages, p + 1))
-    else void loadPage(page + 1)
+    if (isSnapshotView) setPage(p => Math.min(pages, p + 1))
+    else setPage(p => Math.min(pages, p + 1))
   }
 
   const offlineFiltered = useMemo(() => {
@@ -201,7 +207,6 @@ export function TransactionsPage() {
     setPageTransactions(snapshotFiltered.slice(start, start + limit))
   }, [isSnapshotView, snapshotFiltered, page])
 
-  const effectiveOnline = isOnline && !isSnapshotView
   const filtered = effectiveOnline ? pageTransactions : isSnapshotView ? pageTransactions : offlineFiltered
 
   const categories = useMemo(
@@ -237,6 +242,7 @@ export function TransactionsPage() {
   }
 
   const clearFilters = () => {
+    setSearchInput('')
     setSearch('')
     setCategoryFilter('All')
     setModeFilter('All')
@@ -245,6 +251,7 @@ export function TransactionsPage() {
     setMinAmount('')
     setMaxAmount('')
     setHasNotes('All')
+    setPage(1)
   }
 
   const hasActiveFilters = search || categoryFilter !== 'All' || modeFilter !== 'All' || startDate || endDate || minAmount || maxAmount || hasNotes !== 'All'
@@ -319,6 +326,33 @@ export function TransactionsPage() {
   const clearSelection = () => {
     setSelectedIds(new Set())
     setBulkDeleteConfirm(false)
+  }
+
+  const handleBulkExport = () => {
+    const selected = filtered.filter(tx => selectedIds.has(tx.id))
+    if (selected.length === 0) return
+    const header = 'date,particulars,amount,category,mode,notes'
+    const rows = selected.map(tx => {
+      const date = (tx.dateKey || tx.date || '').slice(0, 10)
+      const p = `"${(tx.particulars ?? '').replace(/"/g, '""')}"`
+      const n = `"${(tx.notes ?? '').replace(/"/g, '""')}"`
+      return `${date},${p},${tx.amount},${tx.category},${tx.mode},${n}`
+    })
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `selected-transactions-${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${selected.length} transactions`)
+  }
+
+  const SortIcon = ({ field }: { field: string }) => {
+    const [f, d] = sort.split('-')
+    if (f !== field) return <ArrowUpDown className="inline h-3 w-3 ml-1 opacity-40" />
+    return d === 'desc' ? <ArrowDown className="inline h-3 w-3 ml-1 text-primary" /> : <ArrowUp className="inline h-3 w-3 ml-1 text-primary" />
   }
 
   return (
@@ -499,21 +533,17 @@ export function TransactionsPage() {
           {bulkDeleteConfirm ? (
             <>
               <span className="text-xs text-[hsl(var(--danger))]">Delete {selectedIds.size} transaction{selectedIds.size !== 1 ? 's' : ''}?</span>
-              <button
-                onClick={handleBulkDelete}
-                className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground"
-              >
-                Confirm Delete
-              </button>
-              <button
-                onClick={cancelBulkDelete}
-                className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
-              >
-                Cancel
-              </button>
+              <button onClick={handleBulkDelete} className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground">Confirm Delete</button>
+              <button onClick={cancelBulkDelete} className="rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">Cancel</button>
             </>
           ) : (
             <>
+              <button
+                onClick={handleBulkExport}
+                className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" /> Export Selected
+              </button>
               <button
                 onClick={handleBulkDelete}
                 className="flex items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-medium text-[hsl(var(--danger))] hover:bg-destructive/20 transition-colors"
@@ -547,8 +577,8 @@ export function TransactionsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             placeholder="Search transactions..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={e => handleSearchChange(e.target.value)}
             className="w-full rounded-xl border border-border bg-card py-2 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground"
           />
         </div>
@@ -585,12 +615,12 @@ export function TransactionsPage() {
                   }
                 </button>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Date</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => cycleSort('date')}>Date<SortIcon field="date" /></th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Day</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Particulars</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Amount</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Mode</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => cycleSort('particulars')}>Particulars<SortIcon field="particulars" /></th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => cycleSort('category')}>Category<SortIcon field="category" /></th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => cycleSort('amount')}>Amount<SortIcon field="amount" /></th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => cycleSort('mode')}>Mode<SortIcon field="mode" /></th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Notes</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
             </tr>
