@@ -16,6 +16,7 @@ import {
   bulkDeleteTransactionsApi,
   createTransactionApi,
   deleteTransactionApi,
+  fetchAllTransactions,
   fetchSettings,
   fetchTransactions,
   remapCategoryApi,
@@ -130,7 +131,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
       try {
         const [apiTransactions, apiSettings] = await Promise.all([
-          fetchTransactions(),
+          fetchAllTransactions(),
           fetchSettings(),
         ])
 
