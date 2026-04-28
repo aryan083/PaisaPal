@@ -1,4 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CategoryFilterDropdown } from '@/components/dashboard/CategoryFilterDropdown'
+import type { Category } from '@/types'
 
 export type DayFilter = 'all' | 'weekday' | 'weekend'
 
@@ -8,6 +10,9 @@ interface Props {
   selectedMonth: string // 'YYYY-MM'
   setSelectedMonth: (m: string) => void
   availableMonths: string[]
+  categories: string[]
+  selectedCategories: Category[]
+  setSelectedCategories: (cats: Category[]) => void
 }
 
 const DAY_OPTIONS: { value: DayFilter; label: string }[] = [
@@ -16,7 +21,16 @@ const DAY_OPTIONS: { value: DayFilter; label: string }[] = [
   { value: 'weekend', label: 'Weekends' },
 ]
 
-export function DashboardFilters({ dayFilter, setDayFilter, selectedMonth, setSelectedMonth, availableMonths }: Props) {
+export function DashboardFilters({
+  dayFilter,
+  setDayFilter,
+  selectedMonth,
+  setSelectedMonth,
+  availableMonths,
+  categories,
+  selectedCategories,
+  setSelectedCategories,
+}: Props) {
   const currentIdx = availableMonths.indexOf(selectedMonth)
 
   const goPrev = () => {
@@ -71,6 +85,12 @@ export function DashboardFilters({ dayFilter, setDayFilter, selectedMonth, setSe
           </button>
         ))}
       </div>
+
+      <CategoryFilterDropdown
+        categories={categories}
+        selected={selectedCategories}
+        setSelected={setSelectedCategories}
+      />
     </div>
   )
 }

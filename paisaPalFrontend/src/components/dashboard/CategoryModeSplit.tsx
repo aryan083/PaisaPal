@@ -1,5 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { CATEGORIES, type Transaction } from '@/types'
+import type { Transaction } from '@/types'
+import { useStore } from '@/store'
+import { getAvailableCategories } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 interface Props {
@@ -7,7 +9,10 @@ interface Props {
 }
 
 export function CategoryModeSplit({ transactions }: Props) {
-  const data = CATEGORIES.map(cat => {
+  const { settings } = useStore()
+  const categories = getAvailableCategories(settings)
+
+  const data = categories.map(cat => {
     let online = 0, cash = 0
     transactions.forEach(t => {
       if (t.category === cat) {
@@ -41,13 +46,34 @@ export function CategoryModeSplit({ transactions }: Props) {
               tickLine={false}
             />
             <Tooltip
-              formatter={(value: number, name: string) => [formatCurrency(value), name]}
-              contentStyle={{
-                background: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '12px',
-                fontSize: '12px',
-                color: 'hsl(var(--foreground))',
+              cursor={{ fill: 'hsl(var(--muted) / 0.35)' }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const cat = typeof label === 'string' ? label : String(label)
+                const items = payload
+                  .filter(p => typeof p.value === 'number' ? p.value > 0 : Number(p.value) > 0)
+                  .map(p => ({
+                    name: String(p.name),
+                    value: typeof p.value === 'number' ? p.value : Number(p.value),
+                    color: p.color,
+                  }))
+
+                return (
+                  <div
+                    className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs shadow-xl"
+                    style={{ color: 'hsl(var(--foreground))' }}
+                  >
+                    <div className="font-medium text-foreground">{cat}</div>
+                    <div className="mt-1 grid gap-1">
+                      {items.map(i => (
+                        <div key={i.name} className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">{i.name}</span>
+                          <span className="font-semibold text-foreground">{formatCurrency(i.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
               }}
             />
             <Legend wrapperStyle={{ fontSize: '11px' }} />

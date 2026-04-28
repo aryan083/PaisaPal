@@ -2,12 +2,18 @@ import { useStore } from '@/store'
 import { motion } from 'framer-motion'
 import { formatCurrency } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
+import { PaymentModeSplit } from '@/components/dashboard/PaymentModeSplit'
+import type { Stats } from '@/types'
 
-export function BudgetRing() {
-  const { stats, settings, updateSettings } = useStore()
+type Props = {
+  stats?: Stats | null
+}
+
+export function BudgetRing({ stats }: Props) {
+  const { settings, updateSettings } = useStore()
   const totalSpent = stats?.totalSpent ?? 0
   const budget = settings.stipend + settings.extra
-  const remaining = Math.max(0, budget - totalSpent)
+  const remaining = budget - totalSpent
   const pct = budget > 0 ? Math.min((totalSpent / budget) * 100, 100) : 0
 
   const [editing, setEditing] = useState(false)
@@ -67,7 +73,17 @@ export function BudgetRing() {
           <div className="grid grid-cols-3 gap-2">
             {[
               { label: 'Spent', value: formatCurrency(totalSpent), color: 'text-foreground' },
-              { label: 'Remaining', value: formatCurrency(remaining), color: pct < 70 ? 'text-[hsl(var(--success))]' : pct < 90 ? 'text-[hsl(var(--warning))]' : 'text-[hsl(var(--danger))]' },
+              {
+                label: remaining < 0 ? 'Over' : 'Remaining',
+                value: remaining < 0 ? `-${formatCurrency(Math.abs(remaining))}` : formatCurrency(remaining),
+                color: remaining < 0
+                  ? 'text-[hsl(var(--danger))]'
+                  : pct < 70
+                    ? 'text-[hsl(var(--success))]'
+                    : pct < 90
+                      ? 'text-[hsl(var(--warning))]'
+                      : 'text-[hsl(var(--danger))]',
+              },
               { label: 'Budget', value: formatCurrency(budget), color: 'text-primary' },
             ].map(s => (
               <div key={s.label} className="rounded-xl bg-secondary px-3 py-2 text-center">
@@ -111,6 +127,10 @@ export function BudgetRing() {
               </button>
             </motion.div>
           )}
+
+          <div className="rounded-xl bg-secondary p-3">
+            <PaymentModeSplit stats={stats} variant="embed" />
+          </div>
         </div>
       </div>
     </div>

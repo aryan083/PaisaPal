@@ -1,11 +1,13 @@
-import { formatCurrency, formatDateShort } from '@/lib/utils'
-import { CATEGORY_HEX, type Transaction } from '@/types'
+import { formatCurrency, formatDateShortWithWeekday } from '@/lib/utils'
+import { getCategoryHex, type Transaction } from '@/types'
+import { useStore } from '@/store'
 
 interface Props {
   transactions: Transaction[]
 }
 
 export function RecentTransactions({ transactions }: Props) {
+  const { settings } = useStore()
   const recent = [...transactions]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5)
@@ -18,10 +20,13 @@ export function RecentTransactions({ transactions }: Props) {
         {recent.map(tx => (
           <div key={tx.id} className="flex items-center justify-between">
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: CATEGORY_HEX[tx.category] }} />
+              <div
+                className="h-2 w-2 rounded-full flex-shrink-0"
+                style={{ background: getCategoryHex(tx.category, settings) }}
+              />
               <div className="overflow-hidden">
                 <p className="text-xs text-foreground truncate">{tx.particulars}</p>
-                <p className="text-[10px] text-muted-foreground">{formatDateShort(tx.date)}</p>
+                <p className="text-[10px] text-muted-foreground">{formatDateShortWithWeekday(tx.date)}</p>
               </div>
             </div>
             <span className="text-xs font-semibold text-foreground ml-2">{formatCurrency(tx.amount)}</span>

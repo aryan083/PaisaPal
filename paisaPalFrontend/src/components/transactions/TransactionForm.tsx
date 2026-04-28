@@ -2,19 +2,23 @@ import { useStore } from '@/store'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { TransactionSchema, type TransactionInput } from '@/lib/schemas'
-import { CATEGORIES, CATEGORY_HEX } from '@/types'
+import { getAvailableCategories } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import { useEffect } from 'react'
+import { formatToastMessage, getUserError } from '@/lib/userError'
+import { toLocalDateKey } from '@/lib/utils'
 
 export function TransactionForm() {
-  const { formOpen, closeForm, editingTransaction, addTransaction, updateTransaction } = useStore()
+  const { settings, formOpen, closeForm, editingTransaction, addTransaction, updateTransaction } = useStore()
   const isEditing = !!editingTransaction
+
+  const categories = getAvailableCategories(settings)
 
   const form = useForm<TransactionInput>({
     resolver: zodResolver(TransactionSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+      date: toLocalDateKey(new Date()),
       particulars: '',
       amount: 0,
       category: 'Other',
@@ -26,7 +30,7 @@ export function TransactionForm() {
   useEffect(() => {
     if (editingTransaction) {
       form.reset({
-        date: editingTransaction.date.split('T')[0],
+        date: toLocalDateKey(editingTransaction.date),
         particulars: editingTransaction.particulars,
         amount: editingTransaction.amount,
         category: editingTransaction.category,
@@ -35,7 +39,7 @@ export function TransactionForm() {
       })
     } else {
       form.reset({
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateKey(new Date()),
         particulars: '',
         amount: 0,
         category: 'Other',
@@ -45,23 +49,30 @@ export function TransactionForm() {
     }
   }, [editingTransaction, formOpen, form])
 
-  const onSubmit = (data: TransactionInput) => {
-    if (isEditing && editingTransaction) {
-      updateTransaction(editingTransaction.id, data)
-      toast.success('Transaction updated')
-    } else {
-      addTransaction({
-        date: data.date,
-        particulars: data.particulars,
-        amount: data.amount,
-        category: data.category,
-        mode: data.mode,
-        notes: data.notes ?? '',
-      })
-      toast.success('Transaction added')
+  const onSubmit = async (data: TransactionInput) => {
+    try {
+      if (isEditing && editingTransaction) {
+        await updateTransaction(editingTransaction.id, data)
+        toast.success('Transaction updated')
+      } else {
+        await addTransaction({
+          date: data.date,
+          dateKey: data.date,
+          particulars: data.particulars,
+          amount: data.amount,
+          category: data.category,
+          mode: data.mode,
+          notes: data.notes ?? '',
+        })
+        toast.success('Transaction added')
+      }
+      closeForm()
+      form.reset()
+    } catch (err) {
+      const u = getUserError(err, 'Failed to save transaction')
+      toast.error(formatToastMessage(u))
+      console.error(err)
     }
-    closeForm()
-    form.reset()
   }
 
   return (
@@ -122,7 +133,7 @@ export function TransactionForm() {
               {...form.register('category')}
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
-              {CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -136,7 +147,7 @@ export function TransactionForm() {
               name="mode"
               render={({ field }) => (
                 <div className="flex gap-2">
-                  {(['Online', 'Cash'] as const).map(m => (
+                  {(['Online', 'Cash', 'Card'] as const).map(m => (
                     <button
                       key={m}
                       type="button"

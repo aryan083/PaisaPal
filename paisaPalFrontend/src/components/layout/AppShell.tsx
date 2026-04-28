@@ -8,6 +8,8 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const { sidebarCollapsed } = useStore()
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -15,11 +17,11 @@ export function AppShell({ children }: AppShellProps) {
         <Sidebar />
       </div>
 
-      <div className="flex flex-1 flex-col min-w-0">
-        {/* Mobile Header */}
-        <div className="lg:hidden">
-          <Header />
-        </div>
+      <div className={sidebarCollapsed
+        ? 'flex flex-1 flex-col min-w-0 lg:ml-16'
+        : 'flex flex-1 flex-col min-w-0 lg:ml-60'
+      }>
+        <Header />
 
         {/* Main Content */}
         <main className="flex-1 overflow-x-hidden">
