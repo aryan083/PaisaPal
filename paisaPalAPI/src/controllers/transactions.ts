@@ -26,7 +26,10 @@ export async function listTransactions(req: Request, res: Response) {
 
   const [transactions, total] = await Promise.all([
     Transaction.find(filter)
-      .sort({ [query.sort]: sortDirection })
+      // Important: add a deterministic secondary sort key to keep pagination stable.
+      // Without this, many transactions sharing the same `date` can shuffle across pages,
+      // causing missing/duplicate items when the frontend fetches all pages.
+      .sort({ [query.sort]: sortDirection, _id: sortDirection })
       .skip(skip)
       .limit(query.limit)
       .lean(),
