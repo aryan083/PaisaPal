@@ -1,0 +1,16 @@
+{
+  "name": "PaisaPal",
+  "short_name": "PaisaPal",
+  "description": "Track every rupee. Offline-first expense tracking with sync.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
