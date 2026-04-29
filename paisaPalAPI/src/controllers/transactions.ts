@@ -90,7 +90,11 @@ export async function listTransactions(req: Request, res: Response) {
 
   const [transactions, total] = await Promise.all([
     Transaction.find(filter)
-      .sort({ [query.sort]: sortDirection })
+      // Add deterministic tie-breaker for stable pagination.
+      // Without this, rows with identical values for the primary sort key (e.g. many
+      // txs on the same `date`) can shuffle across requests, causing duplicates/missing
+      // items across pages when the frontend fetches all pages.
+      .sort({ [query.sort]: sortDirection, _id: sortDirection })
       .skip(skip)
       .limit(query.limit)
       .lean(),
