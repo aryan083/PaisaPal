@@ -343,7 +343,7 @@ export function TransactionsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `selected-transactions-${new Date().toISOString().slice(0,10)}.csv`
+    a.download = `selected-transactions-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
     toast.success(`Exported ${selected.length} transactions`)
@@ -393,27 +393,27 @@ export function TransactionsPage() {
           </button>
         </div>
 
-      {(effectiveOnline || isSnapshotView) && pages > 1 && (
-        <div className="mt-4 md:hidden flex items-center justify-between">
-          <button
-            onClick={goPrevPage}
-            disabled={page <= 1}
-            className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
-          >
-            Prev
-          </button>
-          <div className="text-xs text-muted-foreground">
-            Page {page} / {pages}
+        {(effectiveOnline || isSnapshotView) && pages > 1 && (
+          <div className="mt-4 md:hidden flex items-center justify-between">
+            <button
+              onClick={goPrevPage}
+              disabled={page <= 1}
+              className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <div className="text-xs text-muted-foreground">
+              Page {page} / {pages}
+            </div>
+            <button
+              onClick={goNextPage}
+              disabled={page >= pages}
+              className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
+            >
+              Next
+            </button>
           </div>
-          <button
-            onClick={goNextPage}
-            disabled={page >= pages}
-            className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-foreground disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      )}
+        )}
       </div>
 
       {/* Advanced Filters Panel */}
