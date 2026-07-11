@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
 import { formatCurrency, formatDate, getWeekdayShort } from '@/lib/utils'
 import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode } from '@/types'
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X, CopyPlus } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { BulkImport } from '@/components/transactions/BulkImport'
 import { exportTransactionsCsv, fetchTransactionsPaginated } from '@/lib/api'
@@ -23,6 +23,7 @@ export function TransactionsPage() {
     openForm,
     formOpen,
     isSnapshotView,
+    repeatTransaction,
   } = useStore()
   const isOnline = useSyncStore(s => s.isOnline)
 
@@ -674,6 +675,14 @@ export function TransactionsPage() {
                           <button onClick={() => openForm(tx)} aria-label="Edit transaction" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
+                          <button
+                            onClick={() => repeatTransaction(tx)}
+                            aria-label="Repeat transaction"
+                            disabled={isSnapshotView}
+                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <CopyPlus className="h-3.5 w-3.5" />
+                          </button>
                           <button onClick={() => handleDelete(tx.id)} aria-label="Delete transaction" className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -762,6 +771,14 @@ export function TransactionsPage() {
                   ) : (
                     <>
                       <button onClick={() => openForm(tx)} aria-label="Edit" className="p-1 text-muted-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button
+                        onClick={() => repeatTransaction(tx)}
+                        aria-label="Repeat"
+                        disabled={isSnapshotView}
+                        className="p-1 text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <CopyPlus className="h-3.5 w-3.5" />
+                      </button>
                       <button onClick={() => handleDelete(tx.id)} aria-label="Delete" className="p-1 text-muted-foreground"><Trash2 className="h-3.5 w-3.5" /></button>
                     </>
                   )}

@@ -11,7 +11,7 @@ import { toLocalDateKey } from '@/lib/utils'
 
 export function TransactionForm() {
   const { settings, formOpen, closeForm, editingTransaction, addTransaction, updateTransaction } = useStore()
-  const isEditing = !!editingTransaction
+  const isEditing = !!(editingTransaction?.id)
 
   const categories = getAvailableCategories(settings)
 

@@ -62,6 +62,7 @@ interface AppStore {
   toggleSidebarCollapsed: () => void
   openForm: (tx?: Transaction) => void
   closeForm: () => void
+  repeatTransaction: (tx: Transaction) => void
   addTransaction: (
     tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>,
   ) => Promise<void>
@@ -219,6 +220,15 @@ export const useStore = create<AppStore>((set, get) => ({
 
   openForm: (tx) => set({ formOpen: true, editingTransaction: tx || null }),
   closeForm: () => set({ formOpen: false, editingTransaction: null }),
+  repeatTransaction: (tx) => {
+    const today = toLocalDateKey(new Date())
+    get().openForm({
+      ...tx,
+      id: undefined as unknown as string,
+      date: today,
+      dateKey: today,
+    })
+  },
 
   addTransaction: async (data) => {
     set({ isLoading: true })
