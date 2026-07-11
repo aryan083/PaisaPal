@@ -66,7 +66,7 @@ export function SavingsPage() {
     setHistoryItems(
       items.map((i) => ({
         id: i._id,
-        label: `${new Date(i.createdAt).toLocaleDateString()} · ${formatCurrency(i.amount)} · ${i.type}`,
+        label: `${new Date(i.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · ${formatCurrency(i.amount)} · ${i.type}`,
       })),
     )
   }

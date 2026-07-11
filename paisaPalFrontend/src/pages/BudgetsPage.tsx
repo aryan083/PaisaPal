@@ -142,7 +142,7 @@ export function BudgetsPage() {
   const monthLabel = (() => {
     const [y, m] = month.split('-')
     const date = new Date(parseInt(y), parseInt(m) - 1)
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
   })()
 
   const prevMonth = () => {
