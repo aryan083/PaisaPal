@@ -280,7 +280,7 @@ export function TransactionsPage() {
       setDeletingId(null)
       if (isOnline) {
         const nextPage = page > 1 && filtered.length === 1 ? page - 1 : page
-        await loadPage(nextPage)
+        setPage(nextPage)
       }
       toast.success('Transaction deleted')
     } catch (err) {
@@ -321,7 +321,7 @@ export function TransactionsPage() {
       setBulkDeleteConfirm(false)
       if (isOnline) {
         const nextPage = page > 1 && ids.length >= filtered.length ? page - 1 : page
-        await loadPage(nextPage)
+        setPage(nextPage)
       }
       toast.success(`${count} transaction${count !== 1 ? 's' : ''} deleted`)
     } catch (err) {
