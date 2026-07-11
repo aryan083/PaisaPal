@@ -19,11 +19,14 @@ const cors_options: CorsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
 
+    // Allowed origins: local dev + configured frontend URL + any *.vercel.app preview
+    const frontendUrl = process.env.FRONTEND_URL ?? ''
     const allowed =
-      origin === 'https://paisa-pal-c9ol.vercel.app' ||
+      origin === frontendUrl ||
       origin === 'http://localhost:8080' ||
       origin === 'http://localhost:5173' ||
-      origin === 'http://localhost:3000';
+      origin === 'http://localhost:3000' ||
+      /^https:\/\/[a-zA-Z0-9-]+(\.vercel\.app)$/.test(origin)
 
     return callback(null, allowed);
   },
