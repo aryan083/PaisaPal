@@ -17,8 +17,15 @@ import { SpendingCalendar } from '@/components/dashboard/SpendingCalendar'
 import { WeeklySpendSummary } from '@/components/dashboard/WeeklySpendSummary'
 import { DashboardFilters, type DayFilter } from '@/components/dashboard/DashboardFilters'
 import { MonthlyComparison } from '@/components/dashboard/MonthlyComparison'
-import { getAvailableMonths, filterTransactions, computeFilteredStats } from '@/lib/dashboardUtils'
+import { MonthTrendSparkline } from '@/components/dashboard/MonthTrendSparkline'
+import {
+  getAvailableMonths,
+  filterTransactions,
+  computeFilteredStats,
+  computeYearlyTrend,
+} from '@/lib/dashboardUtils'
 import { getAvailableCategories, type Category } from '@/types'
+import { toLocalDateKey } from '@/lib/utils'
 
 const container = { animate: { transition: { staggerChildren: 0.04 } } }
 const item = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 } }
@@ -31,6 +38,7 @@ export function DashboardPage() {
     [settings],
   )
 
+  // ── Monthly view state ──────────────────────────────────────────────────────
   const availableMonths = useMemo(() => getAvailableMonths(transactions), [transactions])
   const [selectedMonth, setSelectedMonth] = useState(
     () => availableMonths[0] || new Date().toISOString().slice(0, 7)
@@ -68,8 +76,46 @@ export function DashboardPage() {
   }, [transactions, selectedMonth, dayFilter, selectedCategories])
 
   const filteredStats = useMemo(() => computeFilteredStats(filteredTxs), [filteredTxs])
+
+  // ── Yearly view state ───────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<'monthly' | 'yearly'>('monthly')
+  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear())
+
+  // Distinct years derived from all transactions (not just filtered)
+  const availableYears = useMemo(() => {
+    const years = new Set<number>()
+    transactions.forEach(t => {
+      const dk = t.dateKey || toLocalDateKey(t.date)
+      years.add(parseInt(dk.slice(0, 4)))
+    })
+    return Array.from(years).sort()
+  }, [transactions])
+
+  const yearlyTxs = useMemo(() => {
+    if (viewMode !== 'yearly') return []
+    return transactions.filter(t => {
+      const dk = t.dateKey || toLocalDateKey(t.date)
+      return parseInt(dk.slice(0, 4)) === selectedYear
+    })
+  }, [transactions, viewMode, selectedYear])
+
+  const yearlyStats = useMemo(() => computeFilteredStats(yearlyTxs), [yearlyTxs])
+
+  // yearlyTrendStats replaces byDate with monthly-bucketed data for DailyTrend
+  const yearlyTrendStats = useMemo(() => {
+    if (!yearlyStats) return null
+    return {
+      ...yearlyStats,
+      byDate: computeYearlyTrend(yearlyTxs, selectedYear),
+    }
+  }, [yearlyStats, yearlyTxs, selectedYear])
+
+  // ── Active stats/transactions (used by widgets) ─────────────────────────────
+  const activeStats = viewMode === 'yearly' ? yearlyStats : filteredStats
+  const activeTxs   = viewMode === 'yearly' ? yearlyTxs   : filteredTxs
+
   const budget = settings.stipend + settings.extra
-  const noData = !filteredStats
+  const noData = !activeStats
 
   return (
     <motion.div
@@ -88,13 +134,19 @@ export function DashboardPage() {
         categories={categories}
         selectedCategories={selectedCategories}
         setSelectedCategories={setSelectedCategories}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        selectedYear={selectedYear}
+        setSelectedYear={setSelectedYear}
+        availableYears={availableYears}
       />
 
-      <BudgetRing stats={filteredStats} />
+      {/* BudgetRing — hidden in yearly mode (monthly budget doesn't apply) */}
+      {viewMode === 'monthly' && <BudgetRing stats={filteredStats} />}
 
       {noData ? (
         <div className="mt-8 text-center py-12 text-muted-foreground card-base">
-          No transactions found for this filter. Try changing the month or day type.
+          No transactions found for this filter. Try changing the {viewMode === 'yearly' ? 'year' : 'month or day type'}.
         </div>
       ) : (
         <motion.div
@@ -109,50 +161,63 @@ export function DashboardPage() {
               Both area charts, naturally same height. Simple equal 2-col.
           ──────────────────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <motion.div variants={item}><DailyTrend stats={filteredStats} /></motion.div>
-            <motion.div variants={item}><CumulativeSpend stats={filteredStats} budget={budget} /></motion.div>
+            <motion.div variants={item}>
+              <DailyTrend stats={viewMode === 'yearly' ? yearlyTrendStats : filteredStats} />
+            </motion.div>
+            <motion.div variants={item}><CumulativeSpend stats={activeStats} budget={budget} /></motion.div>
           </div>
 
+          {/* ── Sparkline (monthly mode only) ─────────────────────────────── */}
+          {viewMode === 'monthly' && (
+            <motion.div variants={item}><MonthTrendSparkline /></motion.div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
-            <motion.div variants={item}><CategoryDonut stats={filteredStats} /></motion.div>
-            <motion.div variants={item}><AvgTransactionByCategory stats={filteredStats} /></motion.div>
-            <motion.div variants={item}><CategoryModeSplit transactions={filteredTxs} /></motion.div>
+            <motion.div variants={item}><CategoryDonut stats={activeStats} /></motion.div>
+            <motion.div variants={item}><AvgTransactionByCategory stats={activeStats} /></motion.div>
+            <motion.div variants={item}><CategoryModeSplit transactions={activeTxs} /></motion.div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-            <motion.div variants={item}><TopCategories stats={filteredStats} /></motion.div>
+            <motion.div variants={item}><TopCategories stats={activeStats} /></motion.div>
             <div className="flex flex-col gap-3">
               <motion.div variants={item}>
-                <WeeklySpendSummary transactions={filteredTxs} />
+                <WeeklySpendSummary transactions={activeTxs} />
               </motion.div>
-              <motion.div variants={item}><QuickStats stats={filteredStats} /></motion.div>
+              <motion.div variants={item}><QuickStats stats={activeStats} /></motion.div>
             </div>
           </div>
 
+          {/* SpendingCalendar — only meaningful in monthly mode */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+            {viewMode === 'monthly' && (
+              <motion.div variants={item}>
+                <SpendingCalendar transactions={activeTxs} selectedMonth={selectedMonth} />
+              </motion.div>
+            )}
             <motion.div variants={item}>
-              <SpendingCalendar transactions={filteredTxs} selectedMonth={selectedMonth} />
-            </motion.div>
-            <motion.div variants={item}>
-              <WeeklySpendingHeatmap transactions={filteredTxs} dayFilter={dayFilter} />
+              <WeeklySpendingHeatmap transactions={activeTxs} dayFilter={dayFilter} />
             </motion.div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
             <motion.div variants={item}>
-              <RecentTransactions transactions={filteredTxs} />
+              <RecentTransactions transactions={activeTxs} />
             </motion.div>
             <motion.div variants={item}>
-              <SpendingHeatmap transactions={filteredTxs} dayFilter={dayFilter} />
+              <SpendingHeatmap transactions={activeTxs} dayFilter={dayFilter} />
             </motion.div>
           </div>
 
         </motion.div>
       )}
 
-      <motion.div variants={item} className="mt-3">
-        <MonthlyComparison />
-      </motion.div>
+      {/* MonthlyComparison — hidden in yearly mode */}
+      {viewMode === 'monthly' && (
+        <motion.div variants={item} className="mt-3">
+          <MonthlyComparison />
+        </motion.div>
+      )}
     </motion.div>
   )
 }

@@ -2,6 +2,11 @@ import type { Transaction, Category, Stats } from '@/types'
 import type { DayFilter } from '@/components/dashboard/DashboardFilters'
 import { parseLocalDate, toLocalDateKey } from '@/lib/utils'
 
+export interface YearlyTrendPoint {
+  date: string   // "YYYY-MM" — always 12 entries for a full year
+  total: number  // 0 for months with no transactions
+}
+
 export interface MonthMetrics {
   month: string          // "YYYY-MM"
   totalSpend: number
@@ -120,4 +125,25 @@ export function computeFilteredStats(transactions: Transaction[]): Stats | null 
     transactionCount: transactions.length,
     activeDays, dailyAverage, biggestDay, biggestTransaction, rapidoStats,
   }
+}
+
+export function computeYearlyTrend(
+  transactions: Transaction[],
+  year: number,
+): YearlyTrendPoint[] {
+  const yearStr = String(year)
+  const monthMap = new Map<string, number>()
+  // Pre-populate all 12 months with 0
+  for (let m = 1; m <= 12; m++) {
+    monthMap.set(`${yearStr}-${String(m).padStart(2, '0')}`, 0)
+  }
+  transactions.forEach(t => {
+    const dk = t.dateKey || toLocalDateKey(t.date)
+    if (!dk.startsWith(yearStr)) return
+    const monthKey = dk.slice(0, 7)
+    monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + t.amount)
+  })
+  return Array.from(monthMap.entries())
+    .map(([date, total]) => ({ date, total }))
+    .sort((a, b) => a.date.localeCompare(b.date))
 }

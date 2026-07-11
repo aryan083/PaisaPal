@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "feature-forge": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/feature-forge/SKILL.md",
+      "computedHash": "c3ac2995e2ec8397457feeea97df88c2a89203083a574ff3799774c43e997c19"
+    },
+    "javascript-pro": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/javascript-pro/SKILL.md",
+      "computedHash": "bc70eb57659b6ce03a7f5ab7b508d580e72ce9f16897a726a2399a40b77ee973"
+    },
+    "react-expert": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-expert/SKILL.md",
+      "computedHash": "fa3b1fa9142d2c66032443ad46e781e2bb8e1682b9263dc455fba36f0fe480a5"
+    },
+    "spark-engineer": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/spark-engineer/SKILL.md",
+      "computedHash": "afd4d4e4af2bd0abab0ee656ca0515a5480a37e15e7ada6736bfdda41a42e707"
+    },
+    "typescript-pro": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/typescript-pro/SKILL.md",
+      "computedHash": "c6fb76eac620470f63ad24e3b35760f12624072f75d5b43b4f00bb9961f08bec"
+    }
+  }
+}

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
 import { formatCurrency, formatDate, getWeekdayShort } from '@/lib/utils'
 import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode } from '@/types'
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X, CopyPlus } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X, CopyPlus, ChevronDown } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { BulkImport } from '@/components/transactions/BulkImport'
 import { exportTransactionsCsv, fetchTransactionsPaginated } from '@/lib/api'
@@ -43,6 +43,17 @@ export function TransactionsPage() {
   const [maxAmount, setMaxAmount] = useState('')
   const [hasNotes, setHasNotes] = useState<'All' | 'yes' | 'no'>('All')
   const [isFetching, setIsFetching] = useState(false)
+
+  // Notes quick-view: tracks which transaction rows have their notes panel expanded
+  const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set())
+  const toggleNote = useCallback((id: string) => {
+    setExpandedNoteIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
 
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(1)
@@ -629,8 +640,8 @@ export function TransactionsPage() {
           <tbody>
             <AnimatePresence>
               {filtered.map(tx => (
+                <React.Fragment key={tx.id}>
                 <motion.tr
-                  key={tx.id}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
                   className={`border-b border-border/50 transition-colors hover:bg-secondary/50 ${deletingId === tx.id ? 'bg-[hsl(var(--danger)/0.08)]' : ''} ${selectedIds.has(tx.id) ? 'bg-primary/5' : ''}`}
@@ -662,7 +673,21 @@ export function TransactionsPage() {
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{tx.mode}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs max-w-[150px] truncate">{tx.notes || '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs max-w-[150px] truncate">
+                    {tx.notes?.trim() ? (
+                      <button
+                        onClick={() => toggleNote(tx.id)}
+                        aria-label={expandedNoteIds.has(tx.id) ? 'Hide notes' : 'Show notes'}
+                        className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                            expandedNoteIds.has(tx.id) ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                    ) : '—'}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       {deletingId === tx.id ? (
@@ -691,6 +716,22 @@ export function TransactionsPage() {
                     </div>
                   </td>
                 </motion.tr>
+                {expandedNoteIds.has(tx.id) && tx.notes?.trim() && (
+                  <motion.tr
+                    key={`${tx.id}-notes`}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <td colSpan={9} className="px-6 pb-3 pt-0">
+                      <p className="rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground whitespace-pre-wrap">
+                        {tx.notes}
+                      </p>
+                    </td>
+                  </motion.tr>
+                )}
+                </React.Fragment>
               ))}
             </AnimatePresence>
           </tbody>
@@ -784,6 +825,37 @@ export function TransactionsPage() {
                   )}
                 </div>
               </div>
+              {/* Notes expand affordance for mobile */}
+              {tx.notes?.trim() && (
+                <button
+                  onClick={() => toggleNote(tx.id)}
+                  aria-label={expandedNoteIds.has(tx.id) ? 'Hide notes' : 'Show notes'}
+                  className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                      expandedNoteIds.has(tx.id) ? 'rotate-180' : ''
+                    }`}
+                  />
+                  <span>Notes</span>
+                </button>
+              )}
+              <AnimatePresence>
+                {expandedNoteIds.has(tx.id) && tx.notes?.trim() && (
+                  <motion.div
+                    key={`${tx.id}-notes-mobile`}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <p className="mt-2 rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground whitespace-pre-wrap">
+                      {tx.notes}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           ))}
         </AnimatePresence>

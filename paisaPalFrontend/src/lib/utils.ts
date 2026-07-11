@@ -29,6 +29,13 @@ export function parseLocalDate(dateStr: string): Date {
     return new Date(year, month - 1, day)
   }
 
+  // ISO datetime string (e.g. "2026-07-11T00:00:00.000Z" from API response)
+  // Convert to IST date string first so the timezone is correct
+  if (val.includes('T')) {
+    const istKey = new Date(val).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+    return parseLocalDate(istKey)
+  }
+
   return new Date(val)
 }
 
