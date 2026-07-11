@@ -2,6 +2,47 @@ import type { Transaction, Category, Stats } from '@/types'
 import type { DayFilter } from '@/components/dashboard/DashboardFilters'
 import { parseLocalDate, toLocalDateKey } from '@/lib/utils'
 
+export interface MonthMetrics {
+  month: string          // "YYYY-MM"
+  totalSpend: number
+  byCategory: Record<string, number>
+  dailyAverage: number   // totalSpend / count of distinct active days (0 if no transactions)
+  transactionCount: number
+  byMode: { Online: number; Cash: number; Card: number }
+  topCategory: string
+}
+
+export function computeMonthMetrics(
+  transactions: Transaction[],
+  month: string,           // "YYYY-MM"
+): MonthMetrics {
+  const txs = transactions.filter(t => {
+    const dk = t.dateKey || toLocalDateKey(t.date)
+    return dk.startsWith(month)
+  })
+
+  const totalSpend = txs.reduce((s, t) => s + t.amount, 0)
+  const transactionCount = txs.length
+
+  const catMap: Record<string, number> = {}
+  for (const t of txs) {
+    catMap[t.category] = (catMap[t.category] ?? 0) + t.amount
+  }
+
+  const activeDays = new Set(txs.map(t => t.dateKey || toLocalDateKey(t.date))).size
+  const dailyAverage = activeDays > 0 ? totalSpend / activeDays : 0
+
+  const byMode = { Online: 0, Cash: 0, Card: 0 }
+  for (const t of txs) {
+    const mode = t.mode as 'Online' | 'Cash' | 'Card'
+    byMode[mode] = (byMode[mode] ?? 0) + t.amount
+  }
+
+  const topCategory = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
+
+  return { month, totalSpend, byCategory: catMap, dailyAverage, transactionCount, byMode, topCategory }
+}
+
 export function getAvailableMonths(transactions: Transaction[]): string[] {
   const months = new Set<string>()
   transactions.forEach(t => {

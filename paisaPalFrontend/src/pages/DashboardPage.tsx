@@ -16,6 +16,7 @@ import { WeeklySpendingHeatmap } from '@/components/dashboard/WeeklySpendingHeat
 import { SpendingCalendar } from '@/components/dashboard/SpendingCalendar'
 import { WeeklySpendSummary } from '@/components/dashboard/WeeklySpendSummary'
 import { DashboardFilters, type DayFilter } from '@/components/dashboard/DashboardFilters'
+import { MonthlyComparison } from '@/components/dashboard/MonthlyComparison'
 import { getAvailableMonths, filterTransactions, computeFilteredStats } from '@/lib/dashboardUtils'
 import { getAvailableCategories, type Category } from '@/types'
 
@@ -148,6 +149,10 @@ export function DashboardPage() {
 
         </motion.div>
       )}
+
+      <motion.div variants={item} className="mt-3">
+        <MonthlyComparison />
+      </motion.div>
     </motion.div>
   )
 }
