@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store'
-import { formatCurrency, formatDate, getWeekdayShort } from '@/lib/utils'
+import { formatCurrency, formatDate, getWeekdayShort, normalizeTransactionModes } from '@/lib/utils'
 import { getAvailableCategories, getCategoryHex, type Category, type PaymentMode } from '@/types'
 import { ArrowUpDown, ArrowUp, ArrowDown, Search, Plus, Pencil, Trash2, Upload, CheckSquare, Square, XCircle, Download, Filter, X, CopyPlus, ChevronDown } from 'lucide-react'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
@@ -109,7 +109,7 @@ export function TransactionsPage() {
       limit,
     }).then(res => {
       if (controller.signal.aborted) return
-      setPageTransactions(res.transactions.map(tx => ({
+      setPageTransactions(res.transactions.map(tx => normalizeTransactionModes({
         id: tx._id,
         date: tx.date,
         dateKey: tx.dateKey,

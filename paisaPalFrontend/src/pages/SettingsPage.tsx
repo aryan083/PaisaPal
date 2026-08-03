@@ -3,7 +3,7 @@ import { useStore } from '@/store'
 import { useState } from 'react'
 import { Sun, Moon, Download, Copy, PiggyBank } from 'lucide-react'
 import { DEFAULT_CATEGORIES, getAvailableCategories, getCategoryHex } from '@/types'
-import { encodeSnapshot, formatCurrency, cn } from '@/lib/utils'
+import { encodeSnapshot, formatCurrency, cn, normalizeTransactionModes } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatToastMessage, getUserError } from '@/lib/userError'
 import { fetchAllTransactions, fetchBudgets } from '@/lib/api'
@@ -97,7 +97,7 @@ export function SettingsPage() {
           fetchAllTransactions(),
           fetchBudgets(),
         ])
-        snapshotTransactions = apiTxs.map((tx) => ({
+        snapshotTransactions = apiTxs.map((tx) => normalizeTransactionModes({
           id: tx._id,
           date: tx.date,
           dateKey: tx.dateKey,

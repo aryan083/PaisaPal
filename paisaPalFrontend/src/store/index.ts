@@ -24,21 +24,10 @@ import {
   updateTransactionApi,
 } from '@/lib/api'
 
-import { toLocalDateKey } from '@/lib/utils'
+import { toLocalDateKey, normalizeTransactionModes } from '@/lib/utils'
 
 import { useAuthStore } from '@/stores/authStore'
 import { useSyncStore } from '@/stores/syncStore'
-
-// Transactions cached in IndexedDB from before the mode-array migration are
-// still shaped with a scalar `mode` field, not `modes`. Reading `.modes` on
-// one of those throws (undefined.forEach) and aborts init() before it ever
-// reaches the online fetch that would replace the stale cache — so normalize
-// on read instead of trusting the cache's shape.
-function normalizeCachedTransaction(t: Transaction & { mode?: string }): Transaction {
-  if (Array.isArray(t.modes) && t.modes.length > 0) return t
-  const legacyMode = t.mode
-  return { ...t, modes: legacyMode ? [legacyMode as Transaction['modes'][number]] : ['Online'] }
-}
 
 interface AppStore {
   transactions: Transaction[]
@@ -130,7 +119,7 @@ export const useStore = create<AppStore>((set, get) => ({
       const cachedTxsRaw = await getTransactions(namespace)
       const cachedSettings = await getSettings(namespace)
       if (cachedTxsRaw.length > 0) {
-        const cachedTxs = cachedTxsRaw.map(normalizeCachedTransaction)
+        const cachedTxs = cachedTxsRaw.map(normalizeTransactionModes)
         set({ transactions: cachedTxs, settings: cachedSettings })
         get().computeStats()
         set({ isLoading: false })
@@ -151,7 +140,7 @@ export const useStore = create<AppStore>((set, get) => ({
           fetchSettings(),
         ])
 
-        const transactions: Transaction[] = apiTransactions.map(tx => ({
+        const transactions: Transaction[] = apiTransactions.map(tx => normalizeTransactionModes({
           id: tx._id,
           date: tx.date,
           dateKey: tx.dateKey,
@@ -191,7 +180,7 @@ export const useStore = create<AppStore>((set, get) => ({
   applySnapshot: async (data) => {
     const auth = useAuthStore.getState()
     const namespace = auth.user?._id ?? 'anonymous'
-    const txs = data.transactions.map(normalizeCachedTransaction)
+    const txs = data.transactions.map(normalizeTransactionModes)
     const settings = data.settings
 
     const budgets = data.budgets ?? []
@@ -254,7 +243,7 @@ export const useStore = create<AppStore>((set, get) => ({
     try {
       if (online) {
         const created = await createTransactionApi(data)
-        const tx: Transaction = {
+        const tx: Transaction = normalizeTransactionModes({
           id: created._id,
           date: created.date,
           dateKey: created.dateKey,
@@ -265,7 +254,7 @@ export const useStore = create<AppStore>((set, get) => ({
           notes: created.notes,
           createdAt: created.createdAt,
           updatedAt: created.updatedAt,
-        }
+        })
         const txs = [tx, ...get().transactions]
         set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))
         await saveTransactions(txs, namespace)
@@ -344,7 +333,7 @@ export const useStore = create<AppStore>((set, get) => ({
     try {
       if (online) {
         const created = await Promise.all(items.map((i) => createTransactionApi(i)))
-        const newTxs: Transaction[] = created.map((c) => ({
+        const newTxs: Transaction[] = created.map((c) => normalizeTransactionModes({
           id: c._id,
           date: c.date,
           dateKey: c.dateKey,
@@ -442,7 +431,7 @@ export const useStore = create<AppStore>((set, get) => ({
         const updated = await updateTransactionApi(id, data)
         const txs = get().transactions.map((tx) =>
           tx.id === id
-            ? {
+            ? normalizeTransactionModes({
                 ...tx,
                 date: updated.date,
                 dateKey: updated.dateKey,
@@ -452,7 +441,7 @@ export const useStore = create<AppStore>((set, get) => ({
                 modes: updated.modes,
                 notes: updated.notes,
                 updatedAt: updated.updatedAt,
-              }
+              })
             : tx,
         )
         set((s) => ({ transactions: txs, transactionRevision: s.transactionRevision + 1 }))

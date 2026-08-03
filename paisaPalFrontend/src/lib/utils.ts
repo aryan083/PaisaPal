@@ -1,8 +1,22 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { Transaction } from "@/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+// A transaction lacking a `modes` array (still on the pre-migration scalar
+// `mode` shape, whether from a stale IndexedDB cache or a not-yet-migrated
+// server record) crashes computeStats/list rendering (`.modes.forEach`/`.join`
+// on undefined) and takes the whole app down. Every place a Transaction is
+// built from IndexedDB or a server response should run through this first.
+export function normalizeTransactionModes<T extends Partial<Transaction> & { mode?: string }>(
+  t: T,
+): T & Pick<Transaction, 'modes'> {
+  if (Array.isArray(t.modes) && t.modes.length > 0) return t as T & Pick<Transaction, 'modes'>
+  const legacyMode = t.mode
+  return { ...t, modes: legacyMode ? [legacyMode as Transaction['modes'][number]] : ['Online'] }
 }
 
 export function formatCurrency(amount: number | undefined | null): string {
