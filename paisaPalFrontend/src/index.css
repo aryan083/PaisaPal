@@ -6,6 +6,8 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
+
     --font-display: "Clash Display", sans-serif;
     --font-body: "Cabinet Grotesk", sans-serif;
 
@@ -77,6 +79,8 @@
   }
 
   [data-theme="light"] {
+    color-scheme: light;
+
     --background: 45 25% 97%;
     --foreground: 220 30% 10%;
 
@@ -132,6 +136,15 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.8;
+    cursor: pointer;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
   }
 }
 
