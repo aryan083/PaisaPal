@@ -17,7 +17,7 @@ interface PreviewRow {
   particulars: string
   amount: number
   category: Category
-  mode: 'Online' | 'Cash' | 'Card'
+  modes: Array<'Online' | 'Cash' | 'Card'>
   notes: string
   isDuplicate: boolean
   isSelected: boolean
@@ -71,6 +71,18 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
 
   const isUnknownCategory = (cat: string) => !categories.includes(cat)
 
+  // Multi-value cells are ';'-joined (matches the backend CSV format) — a
+  // plain string with no ';' still works, it just becomes a one-element array.
+  const splitMultiValue = (raw: string): string[] =>
+    raw.split(';').map((s) => s.trim()).filter(Boolean)
+
+  const toRowModes = (raw: string[]): Array<'Online' | 'Cash' | 'Card'> => {
+    const valid = raw.filter((m): m is 'Online' | 'Cash' | 'Card' =>
+      m === 'Online' || m === 'Cash' || m === 'Card',
+    )
+    return valid.length > 0 ? valid : ['Online']
+  }
+
   const splitCsvLine = (line: string): string[] => {
     const result: string[] = []
     let current = ''
@@ -104,10 +116,10 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     const particulars = r['particulars'] || r['description']
     const amount = r['amount'] || r['amount paid']
     const category = r['category']
-    const mode = r['mode'] || r['mode of payment'] || r['payment mode']
+    const modesRaw = r['modes'] || r['mode'] || r['mode of payment'] || r['payment mode'] || ''
     const notes = r['notes'] || r['note'] || ''
 
-    return { date, particulars, amount, category, mode, notes }
+    return { date, particulars, amount, category, modes: splitMultiValue(modesRaw), notes }
   }
 
   const normalizeClientRecordUnknown = (r: Record<string, unknown>) => {
@@ -117,7 +129,8 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     const particulars = r['particulars'] ?? r['description']
     const amount = r['amount'] ?? r['amount paid'] ?? r['amount_paid']
     const category = r['category']
-    const mode =
+    const modesRaw =
+      r['modes'] ??
       r['mode'] ??
       r['mode of payment'] ??
       r['mode_of_payment'] ??
@@ -133,12 +146,12 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
       particulars: toStr(particulars),
       amount: toStr(amount),
       category: toStr(category),
-      mode: toStr(mode),
+      modes: splitMultiValue(toStr(modesRaw)),
       notes: toStr(notes),
     }
   }
 
-  const parseCsvClient = (csv: string): Array<Record<string, string>> => {
+  const parseCsvClient = (csv: string): Array<ReturnType<typeof normalizeClientRecord>> => {
     const lines = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
     const nonEmpty = lines.filter((l) => l.trim().length > 0)
     if (nonEmpty.length === 0) return []
@@ -146,7 +159,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     const header = splitCsvLine(nonEmpty[0] ?? '')
     const keys = header.map((h) => h.trim().toLowerCase())
 
-    const out: Array<Record<string, string>> = []
+    const out: Array<ReturnType<typeof normalizeClientRecord>> = []
     for (let i = 1; i < nonEmpty.length; i += 1) {
       const row = splitCsvLine(nonEmpty[i] ?? '')
       const rec: Record<string, string> = {}
@@ -160,7 +173,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     return out
   }
 
-  const parseXlsxClient = async (f: File): Promise<Array<Record<string, string>>> => {
+  const parseXlsxClient = async (f: File): Promise<Array<ReturnType<typeof normalizeClientRecordUnknown>>> => {
     const data = await f.arrayBuffer()
     const wb = XLSX.read(data, { type: 'array', cellDates: true })
     const sheetName = wb.SheetNames[0]
@@ -203,9 +216,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           const particulars = String(p.particulars ?? '')
           const amount = Number(p.amount ?? 0)
           const category = String(p.category ?? 'Other')
-          const modeRaw = String(p.mode ?? 'Online')
-          const mode: 'Online' | 'Cash' | 'Card' =
-            modeRaw === 'Cash' ? 'Cash' : modeRaw === 'Card' ? 'Card' : 'Online'
+          const modes = toRowModes(p.modes ?? [])
           const notes = String(p.notes ?? '')
 
           const err =
@@ -219,7 +230,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
             particulars,
             amount,
             category: (category || 'Other') as Category,
-            mode,
+            modes,
             notes,
             isDuplicate: false,
             isSelected: !err,
@@ -248,9 +259,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           const particulars = String(p.particulars ?? '')
           const amount = Number(p.amount ?? 0)
           const category = String(p.category ?? 'Other')
-          const modeRaw = String(p.mode ?? 'Online')
-          const mode: 'Online' | 'Cash' | 'Card' =
-            modeRaw === 'Cash' ? 'Cash' : modeRaw === 'Card' ? 'Card' : 'Online'
+          const modes = toRowModes(p.modes ?? [])
           const notes = String(p.notes ?? '')
 
           const err =
@@ -264,7 +273,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
             particulars,
             amount,
             category: (category || 'Other') as Category,
-            mode,
+            modes,
             notes,
             isDuplicate: false,
             isSelected: !err,
@@ -285,7 +294,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           particulars: p.data.particulars,
           amount: p.data.amount,
           category: p.data.category as Category,
-          mode: p.data.mode as 'Online' | 'Cash' | 'Card',
+          modes: p.data.modes as Array<'Online' | 'Cash' | 'Card'>,
           notes: p.data.notes,
           isDuplicate: p.isDuplicate,
           isSelected: !p.isDuplicate,
@@ -299,7 +308,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
             particulars: '',
             amount: 0,
             category: 'Other',
-            mode: 'Online',
+            modes: ['Online'],
             notes: '',
             isDuplicate: false,
             isSelected: false,
@@ -334,13 +343,13 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
         particulars: p.data.particulars,
         amount: p.data.amount,
         category: p.data.category as Category,
-        mode: p.data.mode as 'Online' | 'Cash' | 'Card',
+        modes: p.data.modes as Array<'Online' | 'Cash' | 'Card'>,
         notes: p.data.notes,
         isDuplicate: p.isDuplicate,
         isSelected: !p.isDuplicate,
         isEditing: false,
       }))
-      
+
       // Add error rows
       for (const err of result.errors) {
         rows.push({
@@ -349,7 +358,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
           particulars: '',
           amount: 0,
           category: 'Other',
-          mode: 'Online',
+          modes: ['Online'],
           notes: '',
           isDuplicate: false,
           isSelected: false,
@@ -404,7 +413,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
     setPreviewRows(rows => rows.filter(r => r.row !== rowNum))
   }
 
-  const updateRow = (rowNum: number, field: keyof PreviewRow, value: string | number) => {
+  const updateRow = (rowNum: number, field: keyof PreviewRow, value: string | number | string[]) => {
     setPreviewRows(rows => 
       rows.map(r => {
         if (r.row !== rowNum) return r
@@ -446,7 +455,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
             particulars: r.particulars,
             amount: r.amount,
             category: r.category,
-            mode: r.mode,
+            modes: r.modes,
             notes: r.notes,
           })),
         )
@@ -481,15 +490,15 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
   }
 
   const buildCsvFromRows = (rows: PreviewRow[]): string => {
-    const header = 'date,particulars,amount,category,mode,notes\n'
+    const header = 'date,particulars,amount,category,modes,notes\n'
     const csvRows = rows.map(r => {
       const date = r.date // DD-MM-YYYY format
       const particulars = `"${r.particulars.replace(/"/g, '""')}"`
       const amount = r.amount
       const category = r.category
-      const mode = r.mode
+      const modes = r.modes.join(';')
       const notes = `"${r.notes.replace(/"/g, '""')}"`
-      return `${date},${particulars},${amount},${category},${mode},${notes}`
+      return `${date},${particulars},${amount},${category},${modes},${notes}`
     })
     return header + csvRows.join('\n')
   }
@@ -705,14 +714,31 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                               </select>
                             </td>
                             <td className="px-1 py-1">
-                              <select
-                                value={row.mode}
-                                onChange={e => updateRow(row.row, 'mode', e.target.value)}
-                                className="px-1 py-0.5 text-xs rounded border border-border bg-background"
-                              >
-                                <option value="Online">Online</option>
-                                <option value="Cash">Cash</option>
-                              </select>
+                              <div className="flex gap-0.5">
+                                {(['Online', 'Cash', 'Card'] as const).map(m => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => {
+                                      const has = row.modes.includes(m)
+                                      if (has) {
+                                        if (row.modes.length > 1) {
+                                          updateRow(row.row, 'modes', row.modes.filter(v => v !== m))
+                                        }
+                                      } else {
+                                        updateRow(row.row, 'modes', [...row.modes, m])
+                                      }
+                                    }}
+                                    className={`px-1.5 py-0.5 text-[10px] rounded border border-border ${
+                                      row.modes.includes(m)
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-background text-muted-foreground'
+                                    }`}
+                                  >
+                                    {m}
+                                  </button>
+                                ))}
+                              </div>
                             </td>
                             <td className="px-1 py-1">
                               <input
@@ -743,7 +769,7 @@ export function BulkImport({ open, onClose }: BulkImportProps) {
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 py-1 text-xs">{row.mode}</td>
+                            <td className="px-2 py-1 text-xs">{row.modes.join(', ')}</td>
                             <td className="px-2 py-1 text-xs truncate max-w-[100px]">{row.notes}</td>
                           </>
                         )}

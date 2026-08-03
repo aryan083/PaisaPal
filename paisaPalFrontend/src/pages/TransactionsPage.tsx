@@ -116,7 +116,7 @@ export function TransactionsPage() {
         particulars: tx.particulars,
         amount: tx.amount,
         category: tx.category as Category,
-        mode: tx.mode as PaymentMode,
+        modes: tx.modes,
         notes: tx.notes,
         createdAt: tx.createdAt,
         updatedAt: tx.updatedAt,
@@ -158,7 +158,7 @@ export function TransactionsPage() {
       result = result.filter(t => t.category === categoryFilter)
     }
     if (modeFilter !== 'All') {
-      result = result.filter(t => t.mode === modeFilter)
+      result = result.filter(t => t.modes.includes(modeFilter))
     }
     if (startDate) {
       result = result.filter(t => (t.dateKey || t.date) >= startDate)
@@ -343,12 +343,12 @@ export function TransactionsPage() {
   const handleBulkExport = () => {
     const selected = filtered.filter(tx => selectedIds.has(tx.id))
     if (selected.length === 0) return
-    const header = 'date,particulars,amount,category,mode,notes'
+    const header = 'date,particulars,amount,category,modes,notes'
     const rows = selected.map(tx => {
       const date = (tx.dateKey || tx.date || '').slice(0, 10)
       const p = `"${(tx.particulars ?? '').replace(/"/g, '""')}"`
       const n = `"${(tx.notes ?? '').replace(/"/g, '""')}"`
-      return `${date},${p},${tx.amount},${tx.category},${tx.mode},${n}`
+      return `${date},${p},${tx.amount},${tx.category},${tx.modes.join(';')},${n}`
     })
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -671,7 +671,7 @@ export function TransactionsPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-foreground">{formatCurrency(tx.amount)}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{tx.mode}</span>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{tx.modes.join(', ')}</span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs max-w-[150px] truncate">
                     {tx.notes?.trim() ? (
@@ -801,7 +801,7 @@ export function TransactionsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{formatDate(tx.dateKey || tx.date)} · {getWeekdayShort(tx.dateKey || tx.date)}</span>
-                  <span className="rounded-full bg-secondary px-1.5 py-0.5">{tx.mode}</span>
+                  <span className="rounded-full bg-secondary px-1.5 py-0.5">{tx.modes.join(', ')}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   {deletingId === tx.id ? (

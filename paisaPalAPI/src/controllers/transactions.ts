@@ -56,7 +56,9 @@ export async function listTransactions(req: Request, res: Response) {
   }
 
   if (query.mode) {
-    filter.mode = query.mode;
+    // Match against the array field — Mongo's $match on an array is
+    // membership-based, so a single scalar value still works correctly.
+    filter.modes = query.mode;
   }
 
   if (query.startDate || query.endDate) {
@@ -375,7 +377,7 @@ export async function exportTransactionsCsv(req: Request, res: Response) {
   }
 
   if (query.mode) {
-    filter.mode = query.mode;
+    filter.modes = query.mode;
   }
 
   if (query.startDate || query.endDate) {
@@ -411,17 +413,18 @@ export async function exportTransactionsCsv(req: Request, res: Response) {
     .limit(10000)
     .lean();
 
-  // Generate CSV
-  const header = 'date,particulars,amount,category,mode,notes\n';
+  // Generate CSV. Multi-value mode cells are joined with ';' — doesn't
+  // collide with the CSV column delimiter ','.
+  const header = 'date,particulars,amount,category,modes,notes\n';
   const rows = transactions
     .map((tx) => {
       const date = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : '';
       const particulars = `"${(tx.particulars ?? '').replace(/"/g, '""')}"`;
       const amount = tx.amount ?? 0;
       const category = tx.category ?? '';
-      const mode = tx.mode ?? '';
+      const modes = (tx.modes ?? []).join(';');
       const notes = `"${(tx.notes ?? '').replace(/"/g, '""')}"`;
-      return `${date},${particulars},${amount},${category},${mode},${notes}`;
+      return `${date},${particulars},${amount},${category},${modes},${notes}`;
     })
     .join('\n');
 

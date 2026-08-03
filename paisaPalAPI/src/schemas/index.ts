@@ -56,8 +56,6 @@ export type Category = z.infer<typeof CategorySchema>;
 
 export const ModeSchema = z.enum(['Online', 'Cash', 'Card']);
 
-export const FrequencySchema = z.enum(['daily', 'weekly', 'monthly', 'yearly']);
-
 export const RecurringTransactionFrequencySchema = z.enum([
   'daily',
   'weekly',
@@ -81,7 +79,7 @@ export const TransactionSchema = z.object({
   particulars: z.string().min(1).max(200),
   amount: z.number().min(0),
   category: CategorySchema,
-  mode: ModeSchema.default('Online'),
+  modes: z.array(ModeSchema).min(1, 'At least one payment mode is required').default(['Online']),
   notes: z.string().max(500).default(''),
 });
 
@@ -162,37 +160,6 @@ export const QueryParamsSchema = z.object({
 });
 
 export type QueryParams = z.infer<typeof QueryParamsSchema>;
-
-export const RecurringRuleSchema = z.object({
-  name: z.string().min(1).max(100),
-  particulars: z.string().min(1).max(200),
-  amount: z.number().min(0),
-  category: CategorySchema,
-  mode: ModeSchema.default('Online'),
-  notes: z.string().max(500).default(''),
-  frequency: FrequencySchema,
-  dayOfMonth: z.number().int().min(1).max(31).optional(),
-  dayOfWeek: z.number().int().min(0).max(6).optional(),
-  startDate: DDMMYYYYDateSchema,
-  endDate: DDMMYYYYDateSchema.optional(),
-  isActive: z.boolean().default(true),
-});
-
-export type RecurringRuleInput = z.infer<typeof RecurringRuleSchema>;
-
-export const RecurringRuleUpdateSchema = RecurringRuleSchema.partial().superRefine(
-  (value: Partial<RecurringRuleInput>, ctx: z.RefinementCtx) => {
-    const hasAtLeastOne = Object.keys(value).length > 0;
-    if (!hasAtLeastOne) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'At least one field must be provided',
-      });
-    }
-  },
-);
-
-export type RecurringRuleUpdateInput = z.infer<typeof RecurringRuleUpdateSchema>;
 
 export const BudgetSchema = z.object({
   category: CategorySchema,

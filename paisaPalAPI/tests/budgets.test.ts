@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+﻿import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Application } from 'express';
 import request from 'supertest';
 
@@ -208,7 +208,7 @@ describe('budgets API', () => {
           particulars: 'Coffee',
           amount: 100,
           category: 'Food & Drinks',
-          mode: 'Online',
+          modes: ['Online'],
           userId: TEST_USER_ID,
         },
         {
@@ -216,7 +216,7 @@ describe('budgets API', () => {
           particulars: 'Groceries',
           amount: 500,
           category: 'Food & Drinks',
-          mode: 'Cash',
+          modes: ['Cash'],
           userId: TEST_USER_ID,
         },
         {
@@ -224,7 +224,7 @@ describe('budgets API', () => {
           particulars: 'Shoes',
           amount: 2000,
           category: 'Shopping',
-          mode: 'Online',
+          modes: ['Online'],
           userId: TEST_USER_ID,
         },
       ]);
@@ -259,7 +259,7 @@ describe('budgets API', () => {
         particulars: 'Expensive meal',
         amount: 500,
         category: 'Food & Drinks',
-        mode: 'Online',
+        modes: ['Online'],
         userId: TEST_USER_ID,
       });
 
@@ -282,7 +282,7 @@ describe('budgets API', () => {
         particulars: 'Bus ticket',
         amount: 50,
         category: 'Bus/GSRTC',
-        mode: 'Cash',
+        modes: ['Cash'],
         userId: TEST_USER_ID,
       });
 

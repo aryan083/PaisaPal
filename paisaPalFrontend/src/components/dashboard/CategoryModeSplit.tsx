@@ -16,8 +16,11 @@ export function CategoryModeSplit({ transactions }: Props) {
     let online = 0, cash = 0
     transactions.forEach(t => {
       if (t.category === cat) {
-        if (t.mode === 'Online') online += t.amount
-        else cash += t.amount
+        // A transaction tagged with multiple modes contributes its full
+        // amount to each — consistent with "full amount per tag" used
+        // everywhere else (not a bug: intentional under multi-tagging).
+        if (t.modes.includes('Online')) online += t.amount
+        if (t.modes.includes('Cash') || t.modes.includes('Card')) cash += t.amount
       }
     })
     return { category: cat, Online: online, Cash: cash }

@@ -71,9 +71,9 @@ export function SettingsPage() {
   }
 
   const exportCSV = () => {
-    const header = 'Date,Particulars,Amount,Category,Mode,Notes'
+    const header = 'Date,Particulars,Amount,Category,Modes,Notes'
     const rows = transactions.map(t =>
-      `${t.date},"${t.particulars}",${t.amount},${t.category},${t.mode},"${t.notes}"`
+      `${t.date},"${t.particulars}",${t.amount},${t.category},${t.modes.join(';')},"${t.notes}"`
     )
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -104,7 +104,7 @@ export function SettingsPage() {
           particulars: tx.particulars,
           amount: tx.amount,
           category: (tx.category || 'Other') as any,
-          mode: tx.mode as any,
+          modes: tx.modes as any,
           notes: tx.notes,
           createdAt: tx.createdAt,
           updatedAt: tx.updatedAt,

@@ -29,6 +29,17 @@ import { toLocalDateKey } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useSyncStore } from '@/stores/syncStore'
 
+// Transactions cached in IndexedDB from before the mode-array migration are
+// still shaped with a scalar `mode` field, not `modes`. Reading `.modes` on
+// one of those throws (undefined.forEach) and aborts init() before it ever
+// reaches the online fetch that would replace the stale cache — so normalize
+// on read instead of trusting the cache's shape.
+function normalizeCachedTransaction(t: Transaction & { mode?: string }): Transaction {
+  if (Array.isArray(t.modes) && t.modes.length > 0) return t
+  const legacyMode = t.mode
+  return { ...t, modes: legacyMode ? [legacyMode as Transaction['modes'][number]] : ['Online'] }
+}
+
 interface AppStore {
   transactions: Transaction[]
   transactionRevision: number
@@ -116,12 +127,16 @@ export const useStore = create<AppStore>((set, get) => ({
       const auth = useAuthStore.getState()
       const namespace = auth.user?._id ?? 'anonymous'
 
-      const cachedTxs = await getTransactions(namespace)
+      const cachedTxsRaw = await getTransactions(namespace)
       const cachedSettings = await getSettings(namespace)
-      if (cachedTxs.length > 0) {
+      if (cachedTxsRaw.length > 0) {
+        const cachedTxs = cachedTxsRaw.map(normalizeCachedTransaction)
         set({ transactions: cachedTxs, settings: cachedSettings })
         get().computeStats()
         set({ isLoading: false })
+        // Persist the normalized shape back so subsequent loads (including
+        // offline ones) don't need to re-normalize from a stale cache.
+        void saveTransactions(cachedTxs, namespace)
       }
 
       const online = useSyncStore.getState().isOnline
@@ -143,7 +158,7 @@ export const useStore = create<AppStore>((set, get) => ({
           particulars: tx.particulars,
           amount: tx.amount,
           category: tx.category as Transaction['category'],
-          mode: tx.mode,
+          modes: tx.modes,
           notes: tx.notes,
           createdAt: tx.createdAt,
           updatedAt: tx.updatedAt,
@@ -176,7 +191,7 @@ export const useStore = create<AppStore>((set, get) => ({
   applySnapshot: async (data) => {
     const auth = useAuthStore.getState()
     const namespace = auth.user?._id ?? 'anonymous'
-    const txs = data.transactions
+    const txs = data.transactions.map(normalizeCachedTransaction)
     const settings = data.settings
 
     const budgets = data.budgets ?? []
@@ -246,7 +261,7 @@ export const useStore = create<AppStore>((set, get) => ({
           particulars: created.particulars,
           amount: created.amount,
           category: created.category as Transaction['category'],
-          mode: created.mode,
+          modes: created.modes,
           notes: created.notes,
           createdAt: created.createdAt,
           updatedAt: created.updatedAt,
@@ -266,7 +281,7 @@ export const useStore = create<AppStore>((set, get) => ({
         particulars: data.particulars,
         amount: data.amount,
         category: data.category,
-        mode: data.mode,
+        modes: data.modes,
         notes: data.notes,
         createdAt: now,
         updatedAt: now,
@@ -336,7 +351,7 @@ export const useStore = create<AppStore>((set, get) => ({
           particulars: c.particulars,
           amount: c.amount,
           category: c.category as Transaction['category'],
-          mode: c.mode,
+          modes: c.modes,
           notes: c.notes,
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
@@ -357,7 +372,7 @@ export const useStore = create<AppStore>((set, get) => ({
         particulars: i.particulars,
         amount: i.amount,
         category: i.category,
-        mode: i.mode,
+        modes: i.modes,
         notes: i.notes,
         createdAt: now,
         updatedAt: now,
@@ -434,7 +449,7 @@ export const useStore = create<AppStore>((set, get) => ({
                 particulars: updated.particulars,
                 amount: updated.amount,
                 category: updated.category as Transaction['category'],
-                mode: updated.mode,
+                modes: updated.modes,
                 notes: updated.notes,
                 updatedAt: updated.updatedAt,
               }
@@ -558,7 +573,7 @@ export const useStore = create<AppStore>((set, get) => ({
       .sort((a, b) => a.date.localeCompare(b.date))
 
     const byMode = { Online: 0, Cash: 0,Card:0 }
-    transactions.forEach(t => { byMode[t.mode] += t.amount })
+    transactions.forEach(t => { t.modes.forEach(m => { byMode[m] += t.amount }) })
 
     const activeDays = dateMap.size
     const dailyAverage = activeDays > 0 ? Math.round(totalSpent / activeDays) : 0

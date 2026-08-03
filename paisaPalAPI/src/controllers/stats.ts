@@ -55,9 +55,12 @@ export async function getStats(req: Request, res: Response) {
     { $sort: { _id: 1 } },
   ]);
 
+  // $group does NOT auto-unwind an array field — must $unwind first so the
+  // full amount is credited to EVERY tagged mode.
   const byModeArr = await Transaction.aggregate<ModeAgg>([
     { $match: { userId } },
-    { $group: { _id: '$mode', total: { $sum: '$amount' } } },
+    { $unwind: '$modes' },
+    { $group: { _id: '$modes', total: { $sum: '$amount' } } },
   ]);
 
   const byMode: Record<'Online' | 'Cash' | 'Card', number> = {
