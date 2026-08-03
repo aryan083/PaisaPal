@@ -142,7 +142,6 @@ const Index = () => {
       {activeTab === 'savings' && <SavingsPage />}
       {activeTab === 'recurring' && <RecurringTransactionsPage />}
       {activeTab === 'envelopes' && <EnvelopesPage />}
-      {activeTab === 'budgets' && <EnvelopesPage />}
       {activeTab === 'insights' && <InsightsPage />}
       {activeTab === 'settings' && <SettingsPage />}
     </AppShell>

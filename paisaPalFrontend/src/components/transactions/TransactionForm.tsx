@@ -22,7 +22,7 @@ export function TransactionForm() {
       particulars: '',
       amount: 0,
       category: 'Other',
-      mode: 'Online',
+      modes: ['Online'],
       notes: '',
     },
   })
@@ -34,7 +34,7 @@ export function TransactionForm() {
         particulars: editingTransaction.particulars,
         amount: editingTransaction.amount,
         category: editingTransaction.category,
-        mode: editingTransaction.mode,
+        modes: editingTransaction.modes,
         notes: editingTransaction.notes,
       })
     } else {
@@ -43,7 +43,7 @@ export function TransactionForm() {
         particulars: '',
         amount: 0,
         category: 'Other',
-        mode: 'Online',
+        modes: ['Online'],
         notes: '',
       })
     }
@@ -61,7 +61,7 @@ export function TransactionForm() {
           particulars: data.particulars,
           amount: data.amount,
           category: data.category,
-          mode: data.mode,
+          modes: data.modes,
           notes: data.notes ?? '',
         })
         toast.success('Transaction added')
@@ -139,21 +139,29 @@ export function TransactionForm() {
             </select>
           </div>
 
-          {/* Mode */}
+          {/* Mode — multi-select: tap to toggle, at least one must stay selected */}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-2 block">Payment Mode</label>
             <Controller
               control={form.control}
-              name="mode"
+              name="modes"
               render={({ field }) => (
                 <div className="flex gap-2">
                   {(['Online', 'Cash', 'Card'] as const).map(m => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => field.onChange(m)}
+                      onClick={() => {
+                        if (field.value.includes(m)) {
+                          if (field.value.length > 1) {
+                            field.onChange(field.value.filter(v => v !== m))
+                          }
+                        } else {
+                          field.onChange([...field.value, m])
+                        }
+                      }}
                       className={`flex-1 rounded-xl py-2 text-sm font-medium transition-colors ${
-                        field.value === m
+                        field.value.includes(m)
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-secondary text-muted-foreground hover:text-foreground'
                       }`}

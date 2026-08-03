@@ -67,7 +67,7 @@ export type ApiTransaction = {
   particulars: string;
   amount: number;
   category: string;
-  mode: 'Online' | 'Cash' | 'Card';
+  modes: Array<'Online' | 'Cash' | 'Card'>;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -212,7 +212,7 @@ export type ImportResult = {
       particulars: string;
       amount: number;
       category: string;
-      mode: string;
+      modes: string[];
       notes: string;
     };
     isDuplicate: boolean;
@@ -596,101 +596,8 @@ export async function handleEnvelopeSurplus(month: string, body: {
   return res.data!;
 }
 
-// Recurring Rules API
-export type ApiRecurringRule = {
-  _id: string;
-  name: string;
-  particulars: string;
-  amount: number;
-  category: string;
-  mode: 'Online' | 'Cash' | 'Card';
-  notes: string;
-  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  dayOfMonth?: number;
-  dayOfWeek?: number;
-  startDate: string;
-  endDate?: string;
-  lastGenerated?: string;
-  nextDue: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type RecurringRuleInput = {
-  name: string;
-  particulars: string;
-  amount: number;
-  category: string;
-  mode: 'Online' | 'Cash' | 'Card';
-  notes?: string;
-  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  dayOfMonth?: number;
-  dayOfWeek?: number;
-  startDate: string;
-  endDate?: string;
-  isActive?: boolean;
-};
-
-export async function fetchRecurringRules(): Promise<ApiRecurringRule[]> {
-  const res = await requestJson<ApiRecurringRule[]>('/recurring');
-  return res.data!;
-}
-
-export async function createRecurringRule(body: RecurringRuleInput): Promise<ApiRecurringRule> {
-  const res = await requestJson<ApiRecurringRule>('/recurring', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-  return res.data!;
-}
-
-export async function updateRecurringRule(id: string, body: Partial<RecurringRuleInput>): Promise<ApiRecurringRule> {
-  const res = await requestJson<ApiRecurringRule>(`/recurring/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  });
-  return res.data!;
-}
-
-export async function deleteRecurringRule(id: string): Promise<void> {
-  await requestJson<null>(`/recurring/${id}`, { method: 'DELETE' });
-}
-
-export type PreviewResult = {
-  rule: RecurringRuleInput;
-  nextOccurrences: string[];
-};
-
-export async function previewRecurringRule(body: RecurringRuleInput, count?: number): Promise<PreviewResult> {
-  const query = count ? `?count=${count}` : '';
-  const res = await requestJson<PreviewResult>(`/recurring/preview${query}`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-  return res.data!;
-}
-
-export type RunResult = {
-  created: number;
-  skipped: number;
-  transactions: Array<{
-    ruleId: string;
-    ruleName: string;
-    particulars: string;
-    amount: number;
-    category: string;
-    date: string;
-  }>;
-};
-
-export async function runRecurringRules(dryRun?: boolean): Promise<RunResult> {
-  const query = dryRun ? '?dryRun=true' : '';
-  const res = await requestJson<RunResult>(`/recurring/run${query}`);
-  return res.data!;
-}
-
-// Budgets API
+// Budgets API — only fetchBudgets is still used (SettingsPage's shareSnapshot);
+// create/update/delete/stats were only used by the dead BudgetsPage.tsx.
 export type ApiBudget = {
   _id: string;
   category: string;
@@ -700,56 +607,9 @@ export type ApiBudget = {
   updatedAt: string;
 };
 
-export type BudgetInput = {
-  category: string;
-  monthlyLimit: number;
-  month: string;
-};
-
-export type BudgetStat = {
-  category: string;
-  monthlyLimit: number;
-  spent: number;
-  remaining: number;
-  percentage: number;
-  isOverBudget: boolean;
-};
-
-export type BudgetStatsData = {
-  month: string;
-  budgets: BudgetStat[];
-  totalBudgeted: number;
-  totalSpent: number;
-};
-
 export async function fetchBudgets(month?: string): Promise<ApiBudget[]> {
   const query = month ? `?month=${month}` : '';
   const res = await requestJson<ApiBudget[]>(`/budgets${query}`);
-  return res.data!;
-}
-
-export async function createBudget(body: BudgetInput): Promise<ApiBudget> {
-  const res = await requestJson<ApiBudget>('/budgets', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-  return res.data!;
-}
-
-export async function updateBudget(id: string, body: { monthlyLimit: number }): Promise<ApiBudget> {
-  const res = await requestJson<ApiBudget>(`/budgets/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  });
-  return res.data!;
-}
-
-export async function deleteBudget(id: string): Promise<void> {
-  await requestJson<null>(`/budgets/${id}`, { method: 'DELETE' });
-}
-
-export async function fetchBudgetStats(month: string): Promise<BudgetStatsData> {
-  const res = await requestJson<BudgetStatsData>(`/budgets/stats?month=${month}`);
   return res.data!;
 }
 

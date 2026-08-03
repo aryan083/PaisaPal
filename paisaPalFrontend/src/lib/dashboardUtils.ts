@@ -39,8 +39,9 @@ export function computeMonthMetrics(
 
   const byMode = { Online: 0, Cash: 0, Card: 0 }
   for (const t of txs) {
-    const mode = t.mode as 'Online' | 'Cash' | 'Card'
-    byMode[mode] = (byMode[mode] ?? 0) + t.amount
+    for (const mode of t.modes) {
+      byMode[mode] = (byMode[mode] ?? 0) + t.amount
+    }
   }
 
   const topCategory = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
@@ -100,7 +101,7 @@ export function computeFilteredStats(transactions: Transaction[]): Stats | null 
     .sort((a, b) => a.date.localeCompare(b.date))
 
   const byMode = { Online: 0, Cash: 0, Card: 0 }
-  transactions.forEach(t => { byMode[t.mode] += t.amount })
+  transactions.forEach(t => { t.modes.forEach(m => { byMode[m] += t.amount }) })
 
   const activeDays = dateMap.size
   const dailyAverage = activeDays > 0 ? Math.round(totalSpent / activeDays) : 0

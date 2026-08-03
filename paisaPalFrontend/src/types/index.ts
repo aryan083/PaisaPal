@@ -14,7 +14,6 @@ export const CATEGORIES = DEFAULT_CATEGORIES
 
 export type Category = string
 export type PaymentMode = 'Online' | 'Cash' | 'Card'
-export type RuleFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 export type Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 
 export type GoalStatus = 'active' | 'completed' | 'paused' | 'ended'
@@ -35,7 +34,7 @@ export interface Transaction {
   particulars: string
   amount: number
   category: Category
-  mode: PaymentMode
+  modes: PaymentMode[]
   notes: string
   createdAt: string
   updatedAt: string
@@ -63,51 +62,6 @@ export interface Stats {
   biggestDay: { date: string; total: number }
   biggestTransaction: Transaction | null
   rapidoStats: { total: number; count: number; avgPerRide: number }
-}
-
-export interface RecurringRule {
-  id: string
-  name: string
-  particulars: string
-  amount: number
-  category: Category
-  mode: PaymentMode
-  notes: string
-  frequency: RuleFrequency
-  dayOfMonth?: number
-  dayOfWeek?: number
-  startDate: string
-  endDate?: string
-  lastGenerated?: string
-  nextDue: string
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface Budget {
-  id: string
-  category: Category
-  monthlyLimit: number
-  month: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface BudgetStat {
-  category: Category
-  monthlyLimit: number
-  spent: number
-  remaining: number
-  percentage: number
-  isOverBudget: boolean
-}
-
-export interface BudgetStats {
-  month: string
-  budgets: BudgetStat[]
-  totalBudgeted: number
-  totalSpent: number
 }
 
 export interface SavingsGoal {
@@ -230,7 +184,7 @@ export interface ImportPreview {
     particulars: string
     amount: number
     category: string
-    mode: string
+    modes: string[]
     notes: string
   }
   isDuplicate: boolean
@@ -255,11 +209,9 @@ export type TabId =
   | 'dashboard'
   | 'transactions'
   | 'recurring'
-  | 'budgets'
   | 'insights'
   | 'settings'
   | 'savings'
-  | 'recurring_tx'
   | 'envelopes'
 
 export const DEFAULT_CATEGORY_HEX: Record<(typeof DEFAULT_CATEGORIES)[number], string> = {
