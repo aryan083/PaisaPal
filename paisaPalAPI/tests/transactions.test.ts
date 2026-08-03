@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+﻿import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Application } from 'express';
 
@@ -39,7 +39,7 @@ describe('transactions API', () => {
       particulars: 'Coffee',
       amount: 20,
       category: 'Food & Drinks',
-      mode: 'Cash',
+      modes: ['Cash'],
       notes: '',
       userId: TEST_USER_ID,
     });
@@ -59,7 +59,7 @@ describe('transactions API', () => {
       particulars: 'Coffee',
       amount: 20,
       category: 'Food & Drinks',
-      mode: 'Cash',
+      modes: ['Cash'],
       notes: 'nice',
       userId: TEST_USER_ID,
     });
@@ -68,7 +68,7 @@ describe('transactions API', () => {
       particulars: 'Bus ticket',
       amount: 50,
       category: 'Bus/GSRTC',
-      mode: 'Online',
+      modes: ['Online'],
       notes: '',
       userId: TEST_USER_ID,
     });
@@ -88,7 +88,7 @@ describe('transactions API', () => {
       particulars: 'Coffee',
       amount: 20,
       category: 'Food & Drinks',
-      mode: 'Cash',
+      modes: ['Cash'],
       notes: '',
       userId: TEST_USER_ID,
     });
@@ -97,7 +97,7 @@ describe('transactions API', () => {
       particulars: 'Bus ticket',
       amount: 50,
       category: 'Bus/GSRTC',
-      mode: 'Online',
+      modes: ['Online'],
       notes: '',
       userId: TEST_USER_ID,
     });
@@ -120,7 +120,7 @@ describe('transactions API', () => {
         particulars: 'Snack',
         amount: 10,
         category: 'Food & Drinks',
-        mode: 'Online',
+        modes: ['Online'],
         notes: 'tasty',
       });
 
@@ -144,7 +144,7 @@ describe('transactions API', () => {
 
   it('imports transactions from csv', async () => {
     const csv =
-      'date,particulars,amount,category,mode,notes\n' +
+      'date,particulars,amount,category,modes,notes\n' +
       '2026-03-01,Coffee,20,Food & Drinks,Cash,\n' +
       '2026-03-02,Bus ticket,50,Bus/GSRTC,Online,\n';
 
@@ -162,13 +162,77 @@ describe('transactions API', () => {
     expect(count).toBe(2);
   });
 
+  it('imports transactions from csv with a semicolon-joined multi-mode cell', async () => {
+    const csv =
+      'date,particulars,amount,category,modes,notes\n' +
+      '2026-03-01,Split payment,500,Shopping,Online;Cash,\n';
+
+    const res = await request(app)
+      .post('/api/transactions/import/csv')
+      .set(authHeaders(token))
+      .attach('file', Buffer.from(csv), 'transactions.csv');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.inserted).toBe(1);
+
+    const [tx] = await Transaction.find();
+    expect(tx!.modes).toEqual(['Online', 'Cash']);
+  });
+
+  it('creates a transaction tagged with multiple payment modes', async () => {
+    const res = await request(app)
+      .post('/api/transactions')
+      .set(authHeaders(token))
+      .send({
+        date: '2026-03-01',
+        particulars: 'Split payment',
+        amount: 500,
+        category: 'Shopping',
+        modes: ['Online', 'Cash'],
+        notes: '',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.modes).toEqual(['Online', 'Cash']);
+  });
+
+  it('lists transactions matching a multi-tagged transaction on either mode', async () => {
+    await Transaction.create({
+      date: new Date('2026-03-01'),
+      particulars: 'Split payment',
+      amount: 500,
+      category: 'Shopping',
+      modes: ['Online', 'Cash'],
+      notes: '',
+      userId: TEST_USER_ID,
+    });
+
+    const byOnline = await request(app)
+      .get('/api/transactions')
+      .query({ mode: 'Online' })
+      .set(authHeaders(token));
+    expect(byOnline.body.data.total).toBe(1);
+
+    const byCash = await request(app)
+      .get('/api/transactions')
+      .query({ mode: 'Cash' })
+      .set(authHeaders(token));
+    expect(byCash.body.data.total).toBe(1);
+
+    const byCard = await request(app)
+      .get('/api/transactions')
+      .query({ mode: 'Card' })
+      .set(authHeaders(token));
+    expect(byCard.body.data.total).toBe(0);
+  });
+
   it('gets by id', async () => {
     const created = await Transaction.create({
       date: new Date('2026-03-01'),
       particulars: 'Coffee',
       amount: 20,
       category: 'Food & Drinks',
-      mode: 'Cash',
+      modes: ['Cash'],
       notes: '',
       userId: TEST_USER_ID,
     });
@@ -194,7 +258,7 @@ describe('transactions API', () => {
       particulars: 'Coffee',
       amount: 20,
       category: 'Food & Drinks',
-      mode: 'Cash',
+      modes: ['Cash'],
       notes: '',
       userId: TEST_USER_ID,
     });
@@ -214,7 +278,7 @@ describe('transactions API', () => {
       particulars: 'Coffee',
       amount: 20,
       category: 'Food & Drinks',
-      mode: 'Cash',
+      modes: ['Cash'],
       notes: '',
       userId: TEST_USER_ID,
     });

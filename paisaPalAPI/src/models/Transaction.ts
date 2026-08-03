@@ -11,7 +11,7 @@ export interface ITransaction extends Document {
   particulars: string;
   amount: number;
   category: Category;
-  mode: Mode;
+  modes: Mode[];
   notes: string;
   createdAt: Date;
   updatedAt: Date;
@@ -38,11 +38,15 @@ const transactionSchema = new Schema<ITransaction>(
       maxlength: 50,
       index: true,
     },
-    mode: {
-      type: String,
+    modes: {
+      type: [String],
       required: true,
       enum: ['Online', 'Cash', 'Card'],
-      default: 'Online',
+      default: ['Online'],
+      validate: {
+        validator: (v: string[]) => Array.isArray(v) && v.length > 0,
+        message: 'At least one payment mode is required',
+      },
     },
     notes: { type: String, default: '', maxlength: 500 },
   },

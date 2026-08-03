@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "ts-node-dev --transpile-only scripts/seed.ts",
-    "seed:docker": "docker compose exec api npm run seed"
+    "seed:docker": "docker compose exec api npm run seed",
+    "backup:db": "ts-node-dev --transpile-only scripts/backup-db.ts",
+    "migrate:mode": "ts-node-dev --transpile-only scripts/migrate-mode-to-array.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

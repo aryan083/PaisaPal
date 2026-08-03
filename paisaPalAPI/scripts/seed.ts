@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+﻿import dotenv from 'dotenv';
 import fs from 'node:fs';
 import mongoose from 'mongoose';
 import path from 'node:path';
@@ -32,7 +32,7 @@ type SeedTransaction = {
     | 'Self Care'
     | 'Transfer/Sent'
     | 'Other';
-  mode: 'Online' | 'Cash';
+  modes: Array<'Online' | 'Cash'>;
   notes?: string;
 };
 
@@ -42,14 +42,14 @@ const seedTransactions: SeedTransaction[] = [
     particulars: 'Rajkot to Ahmedabad - GSRTC Volvo',
     amount: 0,
     category: 'Bus/GSRTC',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-01'),
     particulars: 'iPhone Case',
     amount: 161,
     category: 'Shopping',
-    mode: 'Online',
+    modes: ['Online'],
     notes: 'Paid to Flipkart',
   },
   {
@@ -57,49 +57,49 @@ const seedTransactions: SeedTransaction[] = [
     particulars: 'Rapido: Home Haven to KP Epitome',
     amount: 41,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-02'),
     particulars: 'Rapido: KP Epitome to Home Haven',
     amount: 59,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-03'),
     particulars: 'Rapido: Home Haven to KP Epitome',
     amount: 34,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-03'),
     particulars: 'Rapido: KP Epitome to Home Haven',
     amount: 59,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-05'),
     particulars: 'Rapido: Home Haven to KP Epitome',
     amount: 41,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-05'),
     particulars: 'Rapido: KP Epitome to Home Haven',
     amount: 50,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-05'),
     particulars: 'Soap + Bhakarvadi snack',
     amount: 85,
     category: 'Self Care',
-    mode: 'Online',
+    modes: ['Online'],
     notes: 'Self care? Hell na',
   },
   {
@@ -107,28 +107,28 @@ const seedTransactions: SeedTransaction[] = [
     particulars: 'Rapido: Home Haven to KP Epitome',
     amount: 34,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-06'),
     particulars: 'Rapido: KP Epitome to Home Haven',
     amount: 41,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-07'),
     particulars: 'Sugar Cane Juice',
     amount: 160,
     category: 'Food & Drinks',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-07'),
     particulars: 'Bus: Ahmedabad to Rajkot',
     amount: 208,
     category: 'Bus/GSRTC',
-    mode: 'Online',
+    modes: ['Online'],
     notes: 'Paid to Umang',
   },
   {
@@ -136,35 +136,35 @@ const seedTransactions: SeedTransaction[] = [
     particulars: 'Rapido: Home to Marwadi',
     amount: 116,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-07'),
     particulars: 'Lunch: 2 Dhokla + Hide n Seek',
     amount: 90,
     category: 'Food & Drinks',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-07'),
     particulars: 'Farewell',
     amount: 580,
     category: 'Social',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-08'),
     particulars: 'Recharge 49',
     amount: 49,
     category: 'Recharge/Bills',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-08'),
     particulars: 'Bus: Rajkot to Ahmedabad',
     amount: 208,
     category: 'Bus/GSRTC',
-    mode: 'Online',
+    modes: ['Online'],
     notes: 'Paid to Ritesh',
   },
   {
@@ -172,7 +172,7 @@ const seedTransactions: SeedTransaction[] = [
     particulars: 'Flipkart: DualShock Controller',
     amount: 895,
     category: 'Shopping',
-    mode: 'Online',
+    modes: ['Online'],
     notes: 'ETA 24-Mar',
   },
   {
@@ -180,84 +180,84 @@ const seedTransactions: SeedTransaction[] = [
     particulars: 'Rapido: Home Haven to KP Epitome',
     amount: 41,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-09'),
     particulars: 'Rapido: KP Epitome to Home Haven',
     amount: 67,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-09'),
     particulars: 'Xerox + Glue + Nail Cutter',
     amount: 92,
     category: 'Shopping',
-    mode: 'Cash',
+    modes: ['Cash'],
   },
   {
     date: new Date('2026-03-08'),
     particulars: 'Sprite + Fanta',
     amount: 80,
     category: 'Food & Drinks',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-10'),
     particulars: 'Rapido: Home Haven to KP Epitome',
     amount: 34,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-10'),
     particulars: 'Rapido: KP Epitome to Home Haven',
     amount: 41,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-10'),
     particulars: 'Send to Adii',
     amount: 100,
     category: 'Transfer/Sent',
-    mode: 'Online',
+    modes: ['Online'],
   },
     {
     date: new Date('2026-03-11'),
     particulars: 'Rapido: Home Haven to K P Epitome',
     amount: 34,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-11'),
     particulars: 'Rapido: K P Epitome to Home Haven',
     amount: 59,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-11'),
     particulars: 'Ice cream:chocolate 120Ml',
     amount: 70,
     category: 'Food & Drinks',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-12'),
     particulars: 'Rapido: Home Haven to K P Epitome',
     amount: 40,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   },
   {
     date: new Date('2026-03-12'),
     particulars: 'Rapido: K P Epitome to Home Haven',
     amount: 40,
     category: 'Rapido',
-    mode: 'Online',
+    modes: ['Online'],
   }
 ];
 

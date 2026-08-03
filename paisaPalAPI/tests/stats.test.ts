@@ -34,7 +34,7 @@ describe('stats API', () => {
         particulars: 'Ride 1',
         amount: 50,
         category: 'Rapido',
-        mode: 'Online',
+        modes: ['Online'],
         notes: '',
         userId: TEST_USER_ID,
       },
@@ -43,7 +43,7 @@ describe('stats API', () => {
         particulars: 'Lunch',
         amount: 100,
         category: 'Food & Drinks',
-        mode: 'Cash',
+        modes: ['Cash'],
         notes: '',
         userId: TEST_USER_ID,
       },
@@ -52,7 +52,7 @@ describe('stats API', () => {
         particulars: 'Ride 2',
         amount: 70,
         category: 'Rapido',
-        mode: 'Online',
+        modes: ['Online'],
         notes: '',
         userId: TEST_USER_ID,
       },
@@ -88,5 +88,26 @@ describe('stats API', () => {
       { date: '2026-03-01', total: 150 },
       { date: '2026-03-02', total: 70 },
     ]);
+  });
+
+  it('credits the full amount to every tagged mode (unwind correctness)', async () => {
+    await Transaction.create({
+      date: new Date('2026-03-03'),
+      particulars: 'Split payment',
+      amount: 500,
+      category: 'Shopping',
+      modes: ['Online', 'Cash'],
+      notes: '',
+      userId: TEST_USER_ID,
+    });
+
+    const res = await request(app)
+      .get('/api/stats')
+      .set(authHeaders(token));
+    const data = res.body.data;
+
+    // Online already has 120, Cash already has 100 from beforeEach's fixtures.
+    expect(data.byMode.Online).toBe(620);
+    expect(data.byMode.Cash).toBe(600);
   });
 });

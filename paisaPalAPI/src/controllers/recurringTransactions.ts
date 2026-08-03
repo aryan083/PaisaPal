@@ -193,7 +193,7 @@ export async function markRecurringPaid(req: Request, res: Response) {
     particulars: recurring.name,
     amount: paidAmount,
     category: recurring.category,
-    mode: recurring.mode,
+    modes: [recurring.mode],
     notes: recurring.notes ?? '',
   });
 

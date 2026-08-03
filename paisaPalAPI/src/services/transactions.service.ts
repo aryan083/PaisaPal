@@ -34,7 +34,7 @@ export type ImportCsvResult = {
       particulars: string;
       amount: number;
       category: string;
-      mode: string;
+      modes: string[];
       notes: string;
     };
     isDuplicate: boolean;
@@ -48,12 +48,19 @@ type NormalizedRecord = {
   particulars: unknown;
   amount: unknown;
   category: unknown;
-  mode: unknown;
+  modes: unknown;
   notes: unknown;
 };
 
 function normalizeHeader(header: string): string {
   return header.trim().toLowerCase();
+}
+
+// Multi-value cells are ';'-joined (matches the CSV export format) — a plain
+// string with no ';' still works, it just becomes a one-element array.
+function splitMultiValue(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  return raw.split(';').map((s) => s.trim()).filter(Boolean);
 }
 
 function normalizeRecord(record: RawRecord): NormalizedRecord {
@@ -69,7 +76,9 @@ function normalizeRecord(record: RawRecord): NormalizedRecord {
     particulars: map.particulars ?? map.description,
     amount: map.amount ?? map['amount paid'] ?? map['amount_paid'],
     category: map.category,
-    mode: map.mode ?? map['mode of payment'] ?? map['mode_of_payment'] ?? map['payment mode'] ?? map['payment_mode'],
+    modes: splitMultiValue(
+      map.modes ?? map.mode ?? map['mode of payment'] ?? map['mode_of_payment'] ?? map['payment mode'] ?? map['payment_mode'],
+    ),
     notes: map.notes ?? map.note ?? '',
   };
 }
@@ -88,9 +97,7 @@ function parseCsv(csvBuffer: Buffer): RawRecord[] {
 }
 
 function validateRow(rowNumber: number, record: RawRecord) {
-  console.log(`Validating row ${rowNumber}:`, JSON.stringify(record));
   const normalized = normalizeRecord(record);
-  console.log(`Normalized row ${rowNumber}:`, JSON.stringify(normalized));
   let parsed:
     | ReturnType<typeof TransactionSchema.safeParse>
     | { success: false; error: { issues: Array<{ message: string }> } };
@@ -169,12 +176,6 @@ export async function importTransactionsFromCsv(
     throw err;
   }
 
-  console.log(`Parsed ${records.length} records from CSV`);
-  if (records.length > 0) {
-    console.log('First record keys:', Object.keys(records[0]));
-    console.log('First record:', JSON.stringify(records[0]));
-  }
-
   const errors: ImportError[] = [];
   const valid: Array<{
     row: number;
@@ -184,7 +185,7 @@ export async function importTransactionsFromCsv(
       particulars: string;
       amount: number;
       category: string;
-      mode: string;
+      modes: string[];
       notes: string;
     };
   }> = [];
