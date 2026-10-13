@@ -5,6 +5,8 @@
  * captures the app's claim (amount, order id, date) for linking.
  */
 
+import { stripToText } from './htmlText';
+
 export type ReceiptApp = 'AMAZON' | 'SWIGGY' | 'INSTAMART' | 'FLIPKART' | 'GENERIC';
 
 export interface ParsedReceipt {
@@ -107,21 +109,23 @@ export function parseReceiptEmail(
   receivedAt?: Date,
 ): ParsedReceipt | null {
   const { subject, body } = opts;
-  const text = `${subject}\n${body}`;
-  if (text.trim().length < 20) return null;
+  // Normalize HTML/QP mail to plain text first (same step as Rapido);
+  // extractors below then run against the clean text.
+  const clean = stripToText(`${subject}\n${body}`);
+  if (clean.length < 20) return null;
 
-  const amount = extractAmount(subject, body);
+  const amount = extractAmount('', clean);
   if (amount === null) return null;
 
   const hinted = (opts.app ?? '').toUpperCase();
   const app: ReceiptApp =
     hinted === 'AMAZON' || hinted === 'SWIGGY' || hinted === 'INSTAMART' || hinted === 'FLIPKART'
       ? (hinted as ReceiptApp)
-      : detectApp(`${opts.senderHint ?? ''} ${subject}`, body);
+      : detectApp(`${opts.senderHint ?? ''} ${subject}`, clean);
 
   const fallback = receivedAt ?? new Date();
-  const date = extractDate(subject, body, fallback);
-  const orderId = extractOrderId(subject, body);
+  const date = extractDate('', clean, fallback);
+  const orderId = extractOrderId('', clean);
   const categoryGuess = categoryForApp(app);
 
   const signals = [app !== 'GENERIC', orderId !== null].filter(Boolean).length;

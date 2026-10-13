@@ -28,40 +28,7 @@ export function toIstDateKey(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
-/**
- * Normalize raw email content to searchable plain text:
- * quoted-printable decode (incl. soft line breaks, so a Ride ID split across
- * two QP lines rejoins), HTML tags → spaces, entities → chars, collapse space.
- */
-export function stripToText(raw: string): string {
-  const noSoftBreaks = raw.replace(/=\r?\n/g, '');
-  const decodedQP = noSoftBreaks.replace(/(=[0-9A-Fa-f]{2})+/g, (run) => {
-    const bytes = run
-      .split('=')
-      .filter((h) => h.length > 0)
-      .map((h) => parseInt(h, 16))
-      .filter((n) => Number.isFinite(n));
-    if (bytes.length === 0) return run;
-    try {
-      return Buffer.from(bytes).toString('utf8');
-    } catch {
-      return run;
-    }
-  });
-  const noTags = decodedQP.replace(/<[^>]*>/g, ' ');
-  const entities = noTags
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#(\d+);/g, (_m, code: string) => {
-      const n = Number(code);
-      return Number.isFinite(n) ? String.fromCharCode(n) : _m;
-    });
-  return entities.replace(/\s+/g, ' ').trim();
-}
+import { stripToText } from './htmlText';
 
 function toNum(raw: string): number | null {
   const n = Number(raw.replace(/,/g, '').trim());

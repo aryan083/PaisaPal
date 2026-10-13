@@ -41,7 +41,12 @@ app.use(
   cors(cors_options),
 );
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({
+  // 100kb (not the 10kb default): email ingest endpoints (/api/ingest/rapido,
+  // /api/ingest/receipt) accept HTML mail bodies. Normal API payloads are
+  // bytes-to-KBs; abuse surface is unchanged behind /api rate limiting.
+  limit: '100kb',
+}));
 
 app.use(requestLogger);
 

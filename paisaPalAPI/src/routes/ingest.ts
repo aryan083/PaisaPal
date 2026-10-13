@@ -19,14 +19,17 @@ export const SmsIngestSchema = z.object({
 
 export const RapidoIngestSchema = z.object({
   subject: z.string().min(1).max(300),
-  body: z.string().min(10).max(8000),
+  // 60kb: Apple Mail forwards full HTML (styles, map URLs). The controller
+  // strips to plain text and stores ≤8000 chars; the 100kb JSON cap still guards.
+  body: z.string().min(10).max(60000),
   receivedAt: z.coerce.date().optional(),
 });
 
 export const ReceiptIngestSchema = z.object({
   app: z.string().min(1).max(32).optional(),
   subject: z.string().min(1).max(300),
-  body: z.string().min(10).max(8000),
+  // Same HTML-mail reasoning as Rapido above.
+  body: z.string().min(10).max(60000),
   receivedAt: z.coerce.date().optional(),
 });
 

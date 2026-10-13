@@ -234,4 +234,24 @@ describe('real Rapido invoice templates (sanitized, Oct 2026)', () => {
     expect(tx?.amount).toBe(54);
     expect(tx?.notes).toContain('receipt claimed Online');
   });
+
+  it('accepts full-size HTML mail (~20KB): parses fields, stores stripped text only', async () => {
+    const padding = `<div class="pad">${'x'.repeat(15000)}</div>`;
+    const bigHtml = `<html><head><style>${'y'.repeat(4000)}</style></head><body>${padding}${INVOICE_QR_PAY}</body></html>`;
+    expect(bigHtml.length).toBeGreaterThan(15000);
+
+    const res = await request(app)
+      .post('/api/ingest/rapido')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Rapido Invoice', body: bigHtml });
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.parsed.rapidoAmount).toBe(54);
+    expect(res.body.data.parsed.receiptId).toBe('RD17918988593214218');
+
+    const row = await RapidoReceipt.findOne({ userId: TEST_USER_ID }).lean();
+    expect(row).toBeTruthy();
+    expect(row?.body.length).toBeLessThanOrEqual(8000);
+    expect(row?.body).not.toContain('<div');
+  });
 });

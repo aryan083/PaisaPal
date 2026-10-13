@@ -7,6 +7,7 @@ import {
   resolveIngestUserId,
   shiftDateKey,
 } from '../lib/ingestAuth';
+import { stripToText } from '../lib/htmlText';
 import { connectDB } from '../lib/mongodb';
 import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
 import { parseRapidoEmail } from '../lib/rapidoParser';
@@ -245,7 +246,12 @@ export async function ingestRapido(req: Request, res: Response) {
     receivedAt?: Date;
   };
 
-  const hash = contentHash(subject, body);
+  // Strip HTML/QP to plain text up front: stored + hashed form is small
+  // (≤8000, fits the model) and encoding-insensitive (same invoice as HTML
+  // vs text dedups to one row).
+  const cleanBody = stripToText(body).slice(0, 8000);
+
+  const hash = contentHash(subject, cleanBody);
 
   const existing = await RapidoReceipt.findOne({ userId, receiptHash: hash }).lean();
   if (existing) {
@@ -268,7 +274,7 @@ export async function ingestRapido(req: Request, res: Response) {
       userId,
       receiptHash: hash,
       subject: subject.slice(0, 300),
-      body: body.slice(0, 8000),
+      body: cleanBody,
       rideDateKey: null,
       rapidoAmount: null,
       claimedMode: null,
@@ -321,7 +327,7 @@ export async function ingestRapido(req: Request, res: Response) {
       userId,
       receiptHash: hash,
       subject: subject.slice(0, 300),
-      body: body.slice(0, 8000),
+      body: cleanBody,
       rideDateKey: rideKey,
       rapidoAmount: parsed.rapidoAmount,
       claimedMode: parsed.claimedMode,
@@ -351,7 +357,7 @@ export async function ingestRapido(req: Request, res: Response) {
     userId,
     receiptHash: hash,
     subject: subject.slice(0, 300),
-    body: body.slice(0, 8000),
+    body: cleanBody,
     rideDateKey: rideKey,
     rapidoAmount: parsed.rapidoAmount,
     claimedMode: parsed.claimedMode,

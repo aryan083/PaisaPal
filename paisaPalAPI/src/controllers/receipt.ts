@@ -8,6 +8,7 @@ import {
   shiftDateKey,
 } from '../lib/ingestAuth';
 import { connectDB } from '../lib/mongodb';
+import { stripToText } from '../lib/htmlText';
 import { parseReceiptEmail } from '../lib/receiptParser';
 import AppReceipt from '../models/AppReceipt';
 import Transaction from '../models/Transaction';
@@ -64,7 +65,11 @@ export async function ingestReceipt(req: Request, res: Response) {
     receivedAt?: Date;
   };
 
-  const hash = contentHash(`${app ?? ''}\n${subject}`, body);
+  // Strip HTML/QP up front: stored + hashed form is small (≤8000, fits the
+  // model) and encoding-insensitive.
+  const cleanBody = stripToText(body).slice(0, 8000);
+
+  const hash = contentHash(`${app ?? ''}\n${subject}`, cleanBody);
 
   const existing = await AppReceipt.findOne({ userId, receiptHash: hash }).lean();
   if (existing) {
@@ -91,7 +96,7 @@ export async function ingestReceipt(req: Request, res: Response) {
       receiptHash: hash,
       app: (app ?? 'GENERIC').toUpperCase().slice(0, 32),
       subject: subject.slice(0, 300),
-      body: body.slice(0, 8000),
+      body: cleanBody,
       orderDateKey: null,
       amount: null,
       orderId: null,
@@ -137,7 +142,7 @@ export async function ingestReceipt(req: Request, res: Response) {
       receiptHash: hash,
       app: parsed.app,
       subject: subject.slice(0, 300),
-      body: body.slice(0, 8000),
+      body: cleanBody,
       orderDateKey: parsed.dateKey,
       amount: parsed.amount,
       orderId: parsed.orderId,
@@ -166,7 +171,7 @@ export async function ingestReceipt(req: Request, res: Response) {
     receiptHash: hash,
     app: parsed.app,
     subject: subject.slice(0, 300),
-    body: body.slice(0, 8000),
+    body: cleanBody,
     orderDateKey: parsed.dateKey,
     amount: parsed.amount,
     orderId: parsed.orderId,

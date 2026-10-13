@@ -126,4 +126,32 @@ describe('POST /api/ingest/receipt', () => {
     expect(res.body.data.status).toBe('needs_review');
     expect(await AppReceipt.countDocuments({ status: 'needs_review' })).toBe(1);
   });
+
+  it('accepts full-size HTML mail (~18KB): parses fields, stores stripped text only', async () => {
+    const bigHtml = [
+      '<html><head><style>',
+      'z'.repeat(12000),
+      '</style></head><body>',
+      '<div>Thank you for shopping with Amazon.in</div>',
+      '<div>Order ID 402-1234567-1234567 placed on 08-Oct-2026</div>',
+      '<div>Grand total Rs.499</div>',
+      `<div>${'w'.repeat(4000)}</div>`,
+      '</body></html>',
+    ].join('\n');
+    expect(bigHtml.length).toBeGreaterThan(15000);
+
+    const res = await request(app)
+      .post('/api/ingest/receipt')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Your Amazon.in order #402-1234567-1234567', body: bigHtml });
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.parsed.app).toBe('AMAZON');
+    expect(res.body.data.parsed.amount).toBe(499);
+
+    const row = await AppReceipt.findOne({ userId: TEST_USER_ID }).lean();
+    expect(row).toBeTruthy();
+    expect(row?.body.length).toBeLessThanOrEqual(8000);
+    expect(row?.body).not.toContain('<div');
+  });
 });
