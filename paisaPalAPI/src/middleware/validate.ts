@@ -16,6 +16,11 @@ export const validate = (schema: ZodSchema, target: ValidationTarget = 'body') =
           fieldErrors[key] = value;
         }
       }
+      // Debug aid: echo back which top-level keys actually arrived (keys only,
+      // never values) so clients like iOS Shortcuts can see when a field was
+      // dropped or misnamed before it reached validation.
+      const receivedKeys =
+        typeof toValidate === 'object' && toValidate !== null ? Object.keys(toValidate) : [];
       return res.status(400).json({
         data: null,
         error: 'Validation failed',
@@ -24,6 +29,7 @@ export const validate = (schema: ZodSchema, target: ValidationTarget = 'body') =
         requestId: req.requestId,
         details: flat,
         fieldErrors,
+        receivedKeys,
       });
     }
 
