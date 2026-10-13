@@ -110,3 +110,128 @@ describe('POST /api/ingest/rapido', () => {
     expect(await RapidoReceipt.countDocuments({})).toBe(1);
   });
 });
+
+describe('real Rapido invoice templates (sanitized, Oct 2026)', () => {
+  beforeAll(async () => {
+    process.env.SMS_INGEST_SECRET = INGEST_SECRET;
+    process.env.SMS_INGEST_USER_ID = TEST_USER_ID;
+    await startInMemoryMongo();
+    process.env.SMS_INGEST_SECRET = INGEST_SECRET;
+    process.env.SMS_INGEST_USER_ID = TEST_USER_ID;
+    if (!app) {
+      const mod = await import('@/index');
+      app = mod.default;
+    }
+  });
+
+  beforeEach(async () => {
+    await clearDatabase();
+    await createTestUser();
+    process.env.SMS_INGEST_SECRET = INGEST_SECRET;
+    process.env.SMS_INGEST_USER_ID = TEST_USER_ID;
+  });
+
+  afterAll(async () => {
+    await stopInMemoryMongo();
+  });
+
+  // Sanitized excerpt of Invoice-1: keeps the tricky encodings (QP rupee sign,
+  // soft-broken Ride ID, tags between label and value, ordinal date) while
+  // redacting real pickup/drop addresses.
+  const INVOICE_QR_PAY = [
+    '<div class=3D"content payment-header">Payment Summary</div>',
+    '<img src=3D"https://cust-rapido-images.s3.ap-south-1.am=azonaws.com/rapido-logo.png">',
+    '<div class=3D"rider-label">Ride ID</div>',
+    '<div class=3D"rider-label align-right">RD17918988593214=',
+    '218</div>',
+    '<div class=3D"rider-value">Time of Ride</div>',
+    '<div class=3D"rider-value align-right">Oct 13th 2026, 7:20 PM</div>',
+    '<div class=3D"content success-message">Total</div>',
+    '<div class=3D"content ride-cost">=E2=82=B9 54.00</div>',
+    '<div class=3D"content bill-data">Ride Charge</div>',
+    '<div class=3D"content align-right bill-data">=E2=82=B9 45.11</div>',
+    '<div class=3D"content bill-data">Booking Fees & Convenience Charges</div>',
+    '<div class=3D"content align-right bill-data">=E2=82=B9 8.89</div>',
+    '<div class=3D"content bill-data total">Total Amount</div>',
+    '<div class=3D"content align-right bill-data total">=E2=82=B9 54.00</div>',
+    '<div class=3D"content payment-mode-header">You Paid Using </div>',
+    '<div class =3D "content bill-data payment"> QR Pay</div>',
+    '<div class =3D "content align-right bill-data">=E2=82=B9 54.00</div>',
+    '<div class=3D"content location"> Area A, City 380001, India </div>',
+    '<div class=3D"content location"> Area B, City 380001, India </div>',
+  ].join('\n');
+
+  // Sanitized excerpt of Invoice-2 (Cash claim, morning ride, same day).
+  const INVOICE_CASH = [
+    '<div class=3D"rider-label">Ride ID</div>',
+    '<div class=3D"rider-label align-right">RD17918595849181986</div>',
+    '<div class=3D"rider-value">Time of Ride</div>',
+    '<div class=3D"rider-value align-right">Oct 13th 2026, 8:31 AM</div>',
+    '<div class=3D"content success-message">Total</div>',
+    '<div class=3D"content ride-cost">=E2=82=B9 34.00</div>',
+    '<div class=3D"content bill-data">Ride Charge</div>',
+    '<div class=3D"content align-right bill-data">=E2=82=B9 32.82</div>',
+    '<div class=3D"content bill-data">Booking Fees & Convenience Charges</div>',
+    '<div class=3D"content align-right bill-data">=E2=82=B9 1.18</div>',
+    '<div class=3D"content bill-data total">Total Amount</div>',
+    '<div class=3D"content align-right bill-data total">=E2=82=B9 34.00</div>',
+    '<div class=3D"content payment-mode-header">You Paid Using </div>',
+    '<div class =3D "content bill-data payment"> Cash</div>',
+    '<div class =3D "content align-right bill-data">=E2=82=B9 34.00</div>',
+    '<img src=3D"https://cust-rapido-images.s3.ap-south-1.amazonaws.com/rapido-logo.png">',
+  ].join('\n');
+
+  it('parses the QR Pay invoice: 54.00, ride ID rejoined, Oct 13, Online claim', async () => {
+    const res = await request(app)
+      .post('/api/ingest/rapido')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Rapido Invoice', body: INVOICE_QR_PAY });
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('pending_bank');
+    const parsed = res.body.data.parsed;
+    expect(parsed.rapidoAmount).toBe(54);
+    expect(parsed.receiptId).toBe('RD17918988593214218');
+    expect(parsed.dateKey).toBe('2026-10-13');
+    expect(parsed.claimedMode).toBe('Online');
+    expect(parsed.confidence).toBe('high');
+  });
+
+  it('parses the Cash invoice: 34.00, morning ride, Cash claim kept verbatim', async () => {
+    const res = await request(app)
+      .post('/api/ingest/rapido')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Rapido Invoice', body: INVOICE_CASH });
+    expect(res.status).toBe(201);
+    const parsed = res.body.data.parsed;
+    expect(parsed.rapidoAmount).toBe(34);
+    expect(parsed.receiptId).toBe('RD17918595849181986');
+    expect(parsed.dateKey).toBe('2026-10-13');
+    expect(parsed.claimedMode).toBe('Cash');
+  });
+
+  it('links the QR Pay invoice to its bank debit with zero variance', async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      date: new Date(Date.UTC(2026, 9, 13, 13, 50, 0)),
+      dateKey: '2026-10-13',
+      particulars: 'UPI to RAPIDO',
+      amount: 54,
+      category: 'Other',
+      modes: ['Online'],
+      notes: '[SMS]',
+    });
+
+    const res = await request(app)
+      .post('/api/ingest/rapido')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Rapido Invoice', body: INVOICE_QR_PAY });
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('linked');
+    expect(res.body.data.variance).toBe(0);
+
+    const tx = await Transaction.findOne({ userId: TEST_USER_ID }).lean();
+    expect(tx?.category).toBe('Rapido');
+    expect(tx?.amount).toBe(54);
+    expect(tx?.notes).toContain('receipt claimed Online');
+  });
+});

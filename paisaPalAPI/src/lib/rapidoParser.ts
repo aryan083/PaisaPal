@@ -2,17 +2,22 @@
  * Pure Rapido receipt parser (email subject + body → structured ride).
  * No DB, no side effects — safe to unit test.
  *
- * Rapido sends ride receipts by email (no public API). Templates vary, so
- * this is best-effort v1: amount first, everything else optional.
- * Bank debit stays payment truth — this parser only captures Rapido's claim.
+ * Real template (Oct 2026, from partner@rapido.bike, subject "Rapido Invoice"):
+ * HTML invoice (quoted-printable) with Ride ID / "Time of Ride Oct 13th 2026,
+ * 7:20 PM" / hero "Total ₹ 54.00" / Bill Details breakdown / "You Paid Using"
+ * QR Pay|Cash + PDF attachment (never forwarded — see body limits).
+ *
+ * Calibrated against two real invoices (RD…4218 ₹54 QR Pay, RD…1986 ₹34 Cash).
+ * Bank debit stays payment truth — this parser only captures Rapido's claim,
+ * using exactly the app's vocabulary: Cash | Online | Card.
  */
 
 export interface ParsedRapidoReceipt {
   rapidoAmount: number;
   date: Date;
   dateKey: string;
-  /** Rapido's claimed payment mode ("Cash" is often wrong — see K3). */
-  claimedMode: 'Cash' | 'UPI' | 'Online' | 'UNKNOWN';
+  /** Rapido's claimed payment mode ("Cash" is often wrong — bank wins, see K3). QR Pay counts as Online. */
+  claimedMode: 'Cash' | 'Online' | 'Card' | 'UNKNOWN';
   receiptId: string | null;
   pickup: string | null;
   drop: string | null;
@@ -23,15 +28,49 @@ export function toIstDateKey(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
+/**
+ * Normalize raw email content to searchable plain text:
+ * quoted-printable decode (incl. soft line breaks, so a Ride ID split across
+ * two QP lines rejoins), HTML tags → spaces, entities → chars, collapse space.
+ */
+export function stripToText(raw: string): string {
+  const noSoftBreaks = raw.replace(/=\r?\n/g, '');
+  const decodedQP = noSoftBreaks.replace(/(=[0-9A-Fa-f]{2})+/g, (run) => {
+    const bytes = run
+      .split('=')
+      .filter((h) => h.length > 0)
+      .map((h) => parseInt(h, 16))
+      .filter((n) => Number.isFinite(n));
+    if (bytes.length === 0) return run;
+    try {
+      return Buffer.from(bytes).toString('utf8');
+    } catch {
+      return run;
+    }
+  });
+  const noTags = decodedQP.replace(/<[^>]*>/g, ' ');
+  const entities = noTags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_m, code: string) => {
+      const n = Number(code);
+      return Number.isFinite(n) ? String.fromCharCode(n) : _m;
+    });
+  return entities.replace(/\s+/g, ' ').trim();
+}
+
 function toNum(raw: string): number | null {
   const n = Number(raw.replace(/,/g, '').trim());
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n * 100) / 100;
 }
 
-/** Prefer labelled totals ("Total fare", "Amount paid", "Grand total"), else first money mention. */
-function extractAmount(subject: string, body: string): number | null {
-  const text = `${subject}\n${body}`;
+/** Prefer labelled totals ("Total", "Total Amount", ...), else first money mention. */
+function extractAmount(text: string): number | null {
   const labelled = text.match(
     /(?:total(?: fare| amount)?|amount\s*(?:paid|payable|charged)|grand\s*total|fare|trip\s*total|invoice\s*total)\s*[: ]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
   );
@@ -44,53 +83,87 @@ function extractAmount(subject: string, body: string): number | null {
   return null;
 }
 
-function extractClaimedMode(body: string): ParsedRapidoReceipt['claimedMode'] {
-  const m = body.match(/payment\s*mode\s*[: ]?\s*(cash|upi|online|card|wallet)/i)?.[1]?.toLowerCase();
-  if (m === 'cash') return 'Cash';
-  if (m === 'upi') return 'UPI';
-  if (m === 'online' || m === 'card' || m === 'wallet') return 'Online';
+function extractClaimedMode(text: string): ParsedRapidoReceipt['claimedMode'] {
+  // Real template: "You Paid Using ... QR Pay|Cash". Also accept "Payment mode: X".
+  const labelled = text.match(
+    /(?:paid\s*using|payment\s*mode)\s*[: ]?\s*(cash|qr\s*pay|upi|online|card|wallet)/i,
+  )?.[1]?.toLowerCase().replace(/\s+/g, ' ');
+  const mode = mapModeToken(labelled);
+  if (mode) return mode;
   // Unlabelled mentions as fallback.
-  if (/\bpaid\s+(?:in\s+)?cash\b/i.test(body)) return 'Cash';
-  if (/\bupi\b/i.test(body)) return 'UPI';
+  if (/\bpaid\s+(?:in\s+|using\s+)?cash\b/i.test(text)) return 'Cash';
+  if (/\bqr\s*pay\b/i.test(text)) return 'Online';
+  if (/\bupi\b/i.test(text)) return 'Online';
+  if (/\bcard\b/i.test(text)) return 'Card';
   return 'UNKNOWN';
 }
 
-function extractReceiptId(subject: string, body: string): string | null {
-  const text = `${subject}\n${body}`;
+function mapModeToken(token: string | undefined): ParsedRapidoReceipt['claimedMode'] | null {
+  if (!token) return null;
+  if (token === 'cash') return 'Cash';
+  if (token === 'card') return 'Card';
+  if (token === 'qr pay' || token === 'upi' || token === 'online' || token === 'wallet') return 'Online';
+  return null;
+}
+
+function extractReceiptId(text: string): string | null {
+  // Require an explicit ID marker (ID/No/number word or :/#) — a bare space
+  // is not enough, otherwise "Rapido Invoice Payment ..." captures "Payment".
   const m = text.match(
-    /(?:receipt|invoice|ride|trip|booking|order)(?:\s*(?:id|no|number))?\s*[:# ]\s*([A-Za-z0-9\-]{6,40})/i,
+    /(?:receipt|invoice|ride|trip|booking|order)(?:\s*(?:id|no|number)\s*[:# ]?|\s*[:#])\s*([A-Za-z0-9\-]{6,40})/i,
   );
   return m?.[1]?.slice(0, 64) ?? null;
 }
 
-function extractEndpoint(body: string, label: 'pickup' | 'drop'): string | null {
+function extractEndpoint(text: string, label: 'pickup' | 'drop'): string | null {
   const re =
     label === 'pickup'
       ? /(?:pickup|pick-up|from|source)\s*[: ]\s*([^\n]{3,120})/i
       : /(?:drop|dropoff|drop-off|to|destination)\s*[: ]\s*([^\n]{3,120})/i;
-  const m = body.match(re);
+  const m = text.match(re);
   return m?.[1]?.trim().slice(0, 200) ?? null;
 }
 
-function extractDate(subject: string, body: string, fallback: Date): Date {
-  const text = `${subject}\n${body}`;
-  // 08-Oct-2026 / 08 Oct 2026 / 08/10/2026 / 2026-10-08, optional time.
-  const months: Record<string, number> = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-  };
+const MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/** Convert captured y/mon/d + optional IST clock time to a Date. Months are 0-based. */
+function toDateFromParts(
+  year: number, mon: number, day: number, hhRaw?: string, mmRaw?: string, ampmRaw?: string,
+): Date | null {
+  let hh = hhRaw ? Number(hhRaw) : 12;
+  const mm = mmRaw ? Number(mmRaw) : 0;
+  const ampm = ampmRaw?.toUpperCase();
+  if (ampm === 'PM' && hh < 12) hh += 12;
+  if (ampm === 'AM' && hh === 12) hh = 0;
+  // Wall clock is IST → shift back to UTC for storage.
+  const d = new Date(Date.UTC(year, mon, day, hh - 5, mm - 30, 0));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function extractDate(text: string, fallback: Date): Date {
+  // "Oct 13th 2026, 7:20 PM" (real Rapido template) — also bare "Oct 13th 2026".
   let m = text.match(
-    /(\d{1,2})[-\s/](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s/,]+(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM)?)?/i,
+    /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?[,\s]+(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM)?)?/i,
   );
   if (m?.[1] && m[2] && m[3]) {
-    const mon = months[m[2].toLowerCase()];
+    const mon = MONTHS[m[1].toLowerCase()];
     if (mon !== undefined) {
-      let hh = m[4] ? Number(m[4]) : 12;
-      const mm = m[5] ? Number(m[5]) : 0;
-      if (m[6]?.toUpperCase() === 'PM' && hh < 12) hh += 12;
-      if (m[6]?.toUpperCase() === 'AM' && hh === 12) hh = 0;
-      const d = new Date(Date.UTC(Number(m[3]), mon, Number(m[1]), hh - 5, mm - 30, 0));
-      if (!isNaN(d.getTime())) return d;
+      const d = toDateFromParts(Number(m[3]), mon, Number(m[2]), m[4], m[5], m[6]);
+      if (d) return d;
+    }
+  }
+  // "08-Oct-2026" / "08 Oct 2026" (+ ordinals), optional time.
+  m = text.match(
+    /(\d{1,2})(?:st|nd|rd|th)?[-\s/](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s/,]+(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM)?)?/i,
+  );
+  if (m?.[1] && m[2] && m[3]) {
+    const mon = MONTHS[m[2].toLowerCase()];
+    if (mon !== undefined) {
+      const d = toDateFromParts(Number(m[3]), mon, Number(m[1]), m[4], m[5], m[6]);
+      if (d) return d;
     }
   }
   m = text.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{4})/);
@@ -106,19 +179,19 @@ export function parseRapidoEmail(
   body: string,
   receivedAt?: Date,
 ): ParsedRapidoReceipt | null {
-  const text = `${subject}\n${body}`;
-  if (!/rapido/i.test(text)) return null; // not a Rapido receipt at all
-  if (text.trim().length < 20) return null;
+  const clean = stripToText(`${subject}\n${body}`);
+  if (!/rapido/i.test(clean)) return null; // not a Rapido receipt at all
+  if (clean.length < 20) return null;
 
-  const rapidoAmount = extractAmount(subject, body);
+  const rapidoAmount = extractAmount(clean);
   if (rapidoAmount === null) return null;
 
   const fallback = receivedAt ?? new Date();
-  const date = extractDate(subject, body, fallback);
-  const claimedMode = extractClaimedMode(body);
-  const receiptId = extractReceiptId(subject, body);
-  const pickup = extractEndpoint(body, 'pickup');
-  const drop = extractEndpoint(body, 'drop');
+  const date = extractDate(clean, fallback);
+  const claimedMode = extractClaimedMode(clean);
+  const receiptId = extractReceiptId(clean);
+  const pickup = extractEndpoint(clean, 'pickup');
+  const drop = extractEndpoint(clean, 'drop');
 
   const signals = [receiptId !== null, claimedMode !== 'UNKNOWN', pickup !== null || drop !== null].filter(
     Boolean,
