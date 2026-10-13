@@ -21,6 +21,24 @@ export const validate = (schema: ZodSchema, target: ValidationTarget = 'body') =
       // dropped or misnamed before it reached validation.
       const receivedKeys =
         typeof toValidate === 'object' && toValidate !== null ? Object.keys(toValidate) : [];
+      // TEMP-DEBUG-INGEST (remove after Rapido live verify): log the SHAPE of
+      // rejected payloads — keys, value types, string lengths only, never
+      // values — so iPhone automation failures can be diagnosed from Vercel
+      // logs, where the Shortcut result JSON is invisible. Presence of this
+      // log line also proves the new code is what's serving.
+      try {
+        const shape: Record<string, string> = {};
+        if (typeof toValidate === 'object' && toValidate !== null) {
+          for (const [k, v] of Object.entries(toValidate as Record<string, unknown>)) {
+            shape[k] = typeof v === 'string' ? `string(len=${v.length})` : typeof v;
+          }
+        }
+        console.log(
+          `[ingest-debug] url=${req.method} ${req.url} fieldErrors=${JSON.stringify(fieldErrors)} shape=${JSON.stringify(shape)}`,
+        );
+      } catch {
+        // Logging must never break validation.
+      }
       return res.status(400).json({
         data: null,
         error: 'Validation failed',
