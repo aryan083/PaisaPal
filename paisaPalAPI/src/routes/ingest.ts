@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { ingestRapido, ingestSms } from '../controllers/ingest';
+import { ingestReceipt } from '../controllers/receipt';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validate } from '../middleware/validate';
 
@@ -22,7 +23,15 @@ export const RapidoIngestSchema = z.object({
   receivedAt: z.coerce.date().optional(),
 });
 
+export const ReceiptIngestSchema = z.object({
+  app: z.string().min(1).max(32).optional(),
+  subject: z.string().min(1).max(300),
+  body: z.string().min(10).max(8000),
+  receivedAt: z.coerce.date().optional(),
+});
+
 router.post('/sms', validate(SmsIngestSchema, 'body'), asyncHandler(ingestSms));
 router.post('/rapido', validate(RapidoIngestSchema, 'body'), asyncHandler(ingestRapido));
+router.post('/receipt', validate(ReceiptIngestSchema, 'body'), asyncHandler(ingestReceipt));
 
 export default router;

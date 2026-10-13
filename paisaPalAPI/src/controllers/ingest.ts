@@ -1,7 +1,12 @@
-import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
-import mongoose from 'mongoose';
 
+import {
+  contentHash,
+  getIngestSecret,
+  getProvidedIngestSecret,
+  resolveIngestUserId,
+  shiftDateKey,
+} from '../lib/ingestAuth';
 import { connectDB } from '../lib/mongodb';
 import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
 import { parseRapidoEmail } from '../lib/rapidoParser';
@@ -9,30 +14,6 @@ import { parseSms } from '../lib/smsParser';
 import RapidoReceipt from '../models/RapidoReceipt';
 import SmsInbox from '../models/SmsInbox';
 import Transaction from '../models/Transaction';
-import { User } from '../models/User';
-
-function getIngestSecret(): string | null {
-  const s = process.env.SMS_INGEST_SECRET ?? '';
-  return s.length >= 16 ? s : null;
-}
-
-async function resolveIngestUserId(): Promise<string | null> {
-  const directId = process.env.SMS_INGEST_USER_ID ?? '';
-  if (directId && mongoose.Types.ObjectId.isValid(directId)) return directId;
-
-  const email = (process.env.SMS_INGEST_USER_EMAIL ?? '').trim().toLowerCase();
-  if (email) {
-    const user = (await User.findOne({ email }).select('_id').lean()) as unknown as {
-      _id: mongoose.Types.ObjectId;
-    } | null;
-    if (user) return user._id.toString();
-  }
-  return null;
-}
-
-function bodyHash(sender: string, body: string): string {
-  return crypto.createHash('sha256').update(`${sender}\n${body}`, 'utf8').digest('hex');
-}
 
 export async function ingestSms(req: Request, res: Response) {
   await connectDB();
@@ -48,11 +29,7 @@ export async function ingestSms(req: Request, res: Response) {
     });
   }
 
-  const provided =
-    (req.headers['x-ingest-secret'] as string | undefined)?.trim() ||
-    (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ')
-      ? req.headers.authorization.slice(7).trim()
-      : '');
+  const provided = getProvidedIngestSecret(req);
 
   if (!provided || provided !== configured) {
     return res.status(401).json({
@@ -81,7 +58,7 @@ export async function ingestSms(req: Request, res: Response) {
     receivedAt?: Date;
   };
 
-  const hash = bodyHash(sender, body);
+  const hash = contentHash(sender, body);
 
   // Replay-safe: same SMS twice → same inbox row, no second Transaction.
   const existingInbox = await SmsInbox.findOne({ userId, bodyHash: hash }).lean();
@@ -239,11 +216,7 @@ export async function ingestRapido(req: Request, res: Response) {
     });
   }
 
-  const provided =
-    (req.headers['x-ingest-secret'] as string | undefined)?.trim() ||
-    (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ')
-      ? req.headers.authorization.slice(7).trim()
-      : '');
+  const provided = getProvidedIngestSecret(req);
 
   if (!provided || provided !== configured) {
     return res.status(401).json({
@@ -272,7 +245,7 @@ export async function ingestRapido(req: Request, res: Response) {
     receivedAt?: Date;
   };
 
-  const hash = bodyHash(subject, body);
+  const hash = contentHash(subject, body);
 
   const existing = await RapidoReceipt.findOne({ userId, receiptHash: hash }).lean();
   if (existing) {
@@ -420,11 +393,4 @@ export async function ingestRapido(req: Request, res: Response) {
         ? 'Receipt linked to bank debit'
         : `Receipt linked (bank differs by ${variance >= 0 ? '+' : ''}${variance} — kept both)`,
   });
-}
-
-function shiftDateKey(dateKey: string, days: number): string {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  const dt = new Date(Date.UTC(y ?? 2000, (m ?? 1) - 1, d ?? 1, 6, 30, 0));
-  dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10);
 }
