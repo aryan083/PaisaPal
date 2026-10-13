@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Application } from 'express';
 
+import { parseRapidoEmail } from '@/lib/rapidoParser';
 import RapidoReceipt from '@/models/RapidoReceipt';
 import Transaction from '@/models/Transaction';
 import {
@@ -253,5 +254,160 @@ describe('real Rapido invoice templates (sanitized, Oct 2026)', () => {
     expect(row).toBeTruthy();
     expect(row?.body.length).toBeLessThanOrEqual(8000);
     expect(row?.body).not.toContain('<div');
+  });
+});
+
+describe('rapido invoice PDF path', () => {
+  beforeAll(async () => {
+    process.env.SMS_INGEST_SECRET = INGEST_SECRET;
+    process.env.SMS_INGEST_USER_ID = TEST_USER_ID;
+    await startInMemoryMongo();
+    process.env.SMS_INGEST_SECRET = INGEST_SECRET;
+    process.env.SMS_INGEST_USER_ID = TEST_USER_ID;
+    if (!app) {
+      const mod = await import('@/index');
+      app = mod.default;
+    }
+  });
+
+  beforeEach(async () => {
+    await clearDatabase();
+    await createTestUser();
+    process.env.SMS_INGEST_SECRET = INGEST_SECRET;
+    process.env.SMS_INGEST_USER_ID = TEST_USER_ID;
+  });
+
+  afterAll(async () => {
+    await stopInMemoryMongo();
+  });
+
+  // Sanitized shape of the real invoice-PDF text extraction (names, addresses,
+  // vehicle/GST numbers replaced; ride ID, amounts, dates, modes verbatim).
+  const PDF_TEXT = [
+    'RD17918595849181986',
+    'Oct 13th 2026, 8:31 AM',
+    '3.37 kms',
+    'DISTANCE',
+    '9.05 mins',
+    'DURATION',
+    '₹ 32.82',
+    '₹ 1.18',
+    '₹ 34.00',
+    '₹ 34.00',
+    'Payment Summary',
+    'Ride ID',
+    'Time of Ride',
+    'Total',
+    '₹ 34.00',
+    'Area A, City 380001, India',
+    'Bill Details',
+    'Ride Charge',
+    'Booking Fees & Convenience Charges',
+    'Total Amount',
+    '(Inclusive of Taxes)',
+    'You Paid Using',
+    'Cash',
+    'Area B, City 380001, India',
+    'Tax Invoice',
+    'RD17918595849181986',
+    'Invoice No.',
+    'INVNUMBER01',
+    'Captain Name',
+    'Person A',
+    'Customer Name',
+    'Person B',
+    'Rapido',
+  ].join('\n');
+
+  it('parses PDF-extracted text like the email path', () => {
+    const parsed = parseRapidoEmail('Rapido Invoice', PDF_TEXT);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.rapidoAmount).toBe(34);
+    expect(parsed?.receiptId).toBe('RD17918595849181986');
+    expect(parsed?.dateKey).toBe('2026-10-13');
+    expect(parsed?.claimedMode).toBe('Cash');
+    expect(parsed?.confidence).toBe('high');
+  });
+
+  /** Minimal one-page PDF with computed xref (no PII, no fixtures on disk). */
+  function buildMiniInvoicePdf(line: string): string {
+    const esc = line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    const stream = `BT /F1 12 Tf 10 100 Td (${esc}) Tj ET`;
+    const head = '%PDF-1.4\n';
+    const objs = [
+      '1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n',
+      '2 0 obj\n<</Type/Pages/Kids [3 0 R]/Count 1>>\nendobj\n',
+      '3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox [0 0 1400 144]/Contents 4 0 R/Resources <</Font <</F1 5 0 R>>>>>>\nendobj\n',
+      `4 0 obj\n<</Length ${Buffer.byteLength(stream)}>>\nstream\n${stream}\nendstream\nendobj\n`,
+      '5 0 obj\n<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>\nendobj\n',
+    ];
+    let offset = Buffer.byteLength(head);
+    const offsets: number[] = [0];
+    for (const o of objs) {
+      offsets.push(offset);
+      offset += Buffer.byteLength(o);
+    }
+    let xref = 'xref\n0 6\n0000000000 65535 f \n';
+    for (let i = 1; i <= 5; i += 1) {
+      xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+    }
+    const pdf = head + objs.join('') + xref + `trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n${offset}\n%%EOF`;
+    return Buffer.from(pdf, 'latin1').toString('base64');
+  }
+
+  const MINI_LINE =
+    'Ride ID RD17918595849181986 Time of Ride Oct 13th 2026, 8:31 AM ' +
+    'Total Rs. 34.00 You Paid Using Cash Rapido';
+
+  it('401 without secret', async () => {
+    const res = await request(app).post('/api/ingest/rapido-pdf').send({
+      subject: 'Rapido Invoice',
+      pdfBase64: buildMiniInvoicePdf(MINI_LINE),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('400 on non-base64 payload', async () => {
+    const res = await request(app)
+      .post('/api/ingest/rapido-pdf')
+      .set('x-ingest-secret', INGEST_SECRET)
+      // Long enough to pass Zod's min(100) so the controller's own check fires.
+      .send({ subject: 'Rapido Invoice', pdfBase64: `!!!${'x'.repeat(150)}!!!` });
+    expect(res.status).toBe(400);
+    expect(res.body.errorCode).toBe('PDF_INVALID');
+  });
+
+  it('links a PDF invoice to its bank debit', async () => {
+    await Transaction.create({
+      userId: TEST_USER_ID,
+      date: new Date(Date.UTC(2026, 9, 13, 6, 30, 0)),
+      dateKey: '2026-10-13',
+      particulars: 'UPI to RAPIDO',
+      amount: 34,
+      category: 'Other',
+      modes: ['Online'],
+      notes: '[SMS]',
+    });
+
+    const first = await request(app)
+      .post('/api/ingest/rapido-pdf')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Rapido Invoice', pdfBase64: buildMiniInvoicePdf(MINI_LINE) });
+    expect(first.status).toBe(201);
+    expect(first.body.data.status).toBe('linked');
+    expect(first.body.data.variance).toBe(0);
+    expect(first.body.data.parsed.receiptId).toBe('RD17918595849181986');
+    expect(first.body.data.parsed.claimedMode).toBe('Cash');
+
+    const tx = await Transaction.findOne({ userId: TEST_USER_ID }).lean();
+    expect(tx?.category).toBe('Rapido');
+    expect(tx?.notes).toContain('receipt claimed Cash');
+
+    const second = await request(app)
+      .post('/api/ingest/rapido-pdf')
+      .set('x-ingest-secret', INGEST_SECRET)
+      .send({ subject: 'Rapido Invoice', pdfBase64: buildMiniInvoicePdf(MINI_LINE) });
+    expect(second.status).toBe(200);
+    expect(second.body.data.status).toBe('duplicate');
   });
 });

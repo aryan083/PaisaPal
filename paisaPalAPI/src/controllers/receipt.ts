@@ -1,10 +1,8 @@
 import type { Request, Response } from 'express';
 
 import {
+  authorizeIngest,
   contentHash,
-  getIngestSecret,
-  getProvidedIngestSecret,
-  resolveIngestUserId,
   shiftDateKey,
 } from '../lib/ingestAuth';
 import { connectDB } from '../lib/mongodb';
@@ -25,38 +23,8 @@ const AMOUNT_TOLERANCE = 2;
 export async function ingestReceipt(req: Request, res: Response) {
   await connectDB();
 
-  const configured = getIngestSecret();
-  if (!configured) {
-    return res.status(500).json({
-      data: null,
-      error: 'Ingest not configured',
-      errorCode: 'SERVER_CONFIG_ERROR',
-      suggestion: 'Set SMS_INGEST_SECRET (>=16 chars) and SMS_INGEST_USER_ID or SMS_INGEST_USER_EMAIL on the server.',
-      requestId: req.requestId,
-    });
-  }
-
-  const provided = getProvidedIngestSecret(req);
-  if (!provided || provided !== configured) {
-    return res.status(401).json({
-      data: null,
-      error: 'Invalid ingest secret',
-      errorCode: 'INGEST_UNAUTHORIZED',
-      suggestion: 'Check x-ingest-secret matches the server secret.',
-      requestId: req.requestId,
-    });
-  }
-
-  const userId = await resolveIngestUserId();
-  if (!userId) {
-    return res.status(500).json({
-      data: null,
-      error: 'Ingest user not configured',
-      errorCode: 'SERVER_CONFIG_ERROR',
-      suggestion: 'Set SMS_INGEST_USER_ID (ObjectId) or SMS_INGEST_USER_EMAIL on the server.',
-      requestId: req.requestId,
-    });
-  }
+  const userId = await authorizeIngest(req, res);
+  if (!userId) return;
 
   const { app, subject, body, receivedAt } = req.body as {
     app?: string;

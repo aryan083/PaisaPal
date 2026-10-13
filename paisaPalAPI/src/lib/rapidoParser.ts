@@ -79,7 +79,10 @@ function extractReceiptId(text: string): string | null {
   const m = text.match(
     /(?:receipt|invoice|ride|trip|booking|order)(?:\s*(?:id|no|number)\s*[:# ]?|\s*[:#])\s*([A-Za-z0-9\-]{6,40})/i,
   );
-  return m?.[1]?.slice(0, 64) ?? null;
+  if (m?.[1]) return m[1].slice(0, 64);
+  // Fallback: Rapido ride IDs are distinctive (RD + ~20 digits) and survive
+  // even when label and value land far apart (e.g. PDF text-extraction order).
+  return text.match(/\bRD\d{17,22}\b/)?.[0] ?? null;
 }
 
 function extractEndpoint(text: string, label: 'pickup' | 'drop'): string | null {

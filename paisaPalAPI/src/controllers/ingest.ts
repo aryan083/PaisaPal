@@ -1,16 +1,15 @@
 import type { Request, Response } from 'express';
 
 import {
+  authorizeIngest,
   contentHash,
-  getIngestSecret,
-  getProvidedIngestSecret,
-  resolveIngestUserId,
   shiftDateKey,
 } from '../lib/ingestAuth';
 import { stripToText } from '../lib/htmlText';
+import { PDFParse } from 'pdf-parse';
 import { connectDB } from '../lib/mongodb';
 import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
-import { parseRapidoEmail } from '../lib/rapidoParser';
+import { parseRapidoEmail, type ParsedRapidoReceipt } from '../lib/rapidoParser';
 import { parseSms } from '../lib/smsParser';
 import RapidoReceipt from '../models/RapidoReceipt';
 import SmsInbox from '../models/SmsInbox';
@@ -19,39 +18,8 @@ import Transaction from '../models/Transaction';
 export async function ingestSms(req: Request, res: Response) {
   await connectDB();
 
-  const configured = getIngestSecret();
-  if (!configured) {
-    return res.status(500).json({
-      data: null,
-      error: 'Ingest not configured',
-      errorCode: 'SERVER_CONFIG_ERROR',
-      suggestion: 'Set SMS_INGEST_SECRET (>=16 chars) and SMS_INGEST_USER_ID or SMS_INGEST_USER_EMAIL on the server.',
-      requestId: req.requestId,
-    });
-  }
-
-  const provided = getProvidedIngestSecret(req);
-
-  if (!provided || provided !== configured) {
-    return res.status(401).json({
-      data: null,
-      error: 'Invalid ingest secret',
-      errorCode: 'INGEST_UNAUTHORIZED',
-      suggestion: 'Check x-ingest-secret in your iPhone Shortcut matches the server secret.',
-      requestId: req.requestId,
-    });
-  }
-
-  const userId = await resolveIngestUserId();
-  if (!userId) {
-    return res.status(500).json({
-      data: null,
-      error: 'Ingest user not configured',
-      errorCode: 'SERVER_CONFIG_ERROR',
-      suggestion: 'Set SMS_INGEST_USER_ID (ObjectId) or SMS_INGEST_USER_EMAIL (existing user email) on the server.',
-      requestId: req.requestId,
-    });
-  }
+  const userId = await authorizeIngest(req, res);
+  if (!userId) return;
 
   const { sender, body, receivedAt } = req.body as {
     sender: string;
@@ -206,39 +174,8 @@ export async function ingestSms(req: Request, res: Response) {
 export async function ingestRapido(req: Request, res: Response) {
   await connectDB();
 
-  const configured = getIngestSecret();
-  if (!configured) {
-    return res.status(500).json({
-      data: null,
-      error: 'Ingest not configured',
-      errorCode: 'SERVER_CONFIG_ERROR',
-      suggestion: 'Set SMS_INGEST_SECRET (>=16 chars) and SMS_INGEST_USER_ID or SMS_INGEST_USER_EMAIL on the server.',
-      requestId: req.requestId,
-    });
-  }
-
-  const provided = getProvidedIngestSecret(req);
-
-  if (!provided || provided !== configured) {
-    return res.status(401).json({
-      data: null,
-      error: 'Invalid ingest secret',
-      errorCode: 'INGEST_UNAUTHORIZED',
-      suggestion: 'Check x-ingest-secret matches the server secret.',
-      requestId: req.requestId,
-    });
-  }
-
-  const userId = await resolveIngestUserId();
-  if (!userId) {
-    return res.status(500).json({
-      data: null,
-      error: 'Ingest user not configured',
-      errorCode: 'SERVER_CONFIG_ERROR',
-      suggestion: 'Set SMS_INGEST_USER_ID (ObjectId) or SMS_INGEST_USER_EMAIL on the server.',
-      requestId: req.requestId,
-    });
-  }
+  const userId = await authorizeIngest(req, res);
+  if (!userId) return;
 
   const { subject, body, receivedAt } = req.body as {
     subject: string;
@@ -399,4 +336,264 @@ export async function ingestRapido(req: Request, res: Response) {
         ? 'Receipt linked to bank debit'
         : `Receipt linked (bank differs by ${variance >= 0 ? '+' : ''}${variance} — kept both)`,
   });
+}
+
+type RapidoReconcileOutcome = {
+  httpStatus: 200 | 201;
+  response: { data: unknown; error: null; message: string };
+};
+
+/**
+ * Shared store + bank-link flow for a parsed Rapido receipt, whatever carrier
+ * delivered it (email HTML body or invoice PDF text). Bank debit stays payment
+ * truth: never creates a Transaction, only stores the receipt and links it
+ * (±1 day, ±₹10) with additive annotation.
+ */
+async function reconcileParsedRapido(args: {
+  userId: string;
+  hash: string;
+  subject: string;
+  storeBody: string;
+  parsed: ParsedRapidoReceipt | null;
+  unparsedReason: string;
+}): Promise<RapidoReconcileOutcome> {
+  const { userId, hash, subject, storeBody, parsed, unparsedReason } = args;
+
+  if (!parsed) {
+    const row = await RapidoReceipt.create({
+      userId,
+      receiptHash: hash,
+      subject: subject.slice(0, 300),
+      body: storeBody,
+      rideDateKey: null,
+      rapidoAmount: null,
+      claimedMode: null,
+      receiptId: null,
+      linkedTransactionId: null,
+      variance: null,
+      status: 'needs_review',
+      parseError: unparsedReason,
+    });
+    return {
+      httpStatus: 200,
+      response: {
+        data: {
+          status: 'needs_review' as const,
+          reason: 'Could not parse — saved for review.',
+          receiptDbId: row._id.toString(),
+          linkedTransactionId: null,
+          parsed: null,
+        },
+        error: null,
+        message: 'Receipt needs review',
+      },
+    };
+  }
+
+  // Match bank Transaction: ±1 day dateKey window, amount within ±10.
+  // Bank amount wins; receipt keeps original + variance (K4).
+  const rideKey = parsed.dateKey;
+  const low = shiftDateKey(rideKey, -1);
+  const high = shiftDateKey(rideKey, 1);
+  const candidates = await Transaction.find({
+    userId,
+    dateKey: { $gte: low, $lte: high },
+    amount: { $gte: parsed.rapidoAmount - 10, $lte: parsed.rapidoAmount + 10 },
+  })
+    .sort({ amount: 1 })
+    .limit(20)
+    .lean();
+
+  // Prefer closest amount, then same-day.
+  candidates.sort((a, b) => {
+    const da = Math.abs(a.amount - parsed.rapidoAmount);
+    const db = Math.abs(b.amount - parsed.rapidoAmount);
+    if (da !== db) return da - db;
+    const sa = a.dateKey === rideKey ? 0 : 1;
+    const sb = b.dateKey === rideKey ? 0 : 1;
+    return sa - sb;
+  });
+  const match = candidates[0] ?? null;
+
+  if (!match) {
+    const row = await RapidoReceipt.create({
+      userId,
+      receiptHash: hash,
+      subject: subject.slice(0, 300),
+      body: storeBody,
+      rideDateKey: rideKey,
+      rapidoAmount: parsed.rapidoAmount,
+      claimedMode: parsed.claimedMode,
+      receiptId: parsed.receiptId,
+      linkedTransactionId: null,
+      variance: null,
+      status: 'pending_bank',
+      parseError: null,
+    });
+    return {
+      httpStatus: 201,
+      response: {
+        data: {
+          status: 'pending_bank' as const,
+          reason: 'No bank debit within ±1 day / ±₹10 yet — will link when the SMS arrives.',
+          receiptDbId: row._id.toString(),
+          linkedTransactionId: null,
+          variance: null,
+          parsed,
+        },
+        error: null,
+        message: 'Receipt stored, waiting for bank debit',
+      },
+    };
+  }
+
+  const variance = Math.round((match.amount - parsed.rapidoAmount) * 100) / 100;
+
+  const row = await RapidoReceipt.create({
+    userId,
+    receiptHash: hash,
+    subject: subject.slice(0, 300),
+    body: storeBody,
+    rideDateKey: rideKey,
+    rapidoAmount: parsed.rapidoAmount,
+    claimedMode: parsed.claimedMode,
+    receiptId: parsed.receiptId,
+    linkedTransactionId: match._id,
+    variance,
+    status: 'linked',
+    parseError: null,
+  });
+
+  // Annotate the bank Transaction (additive only — never change amount):
+  // bank mode wins over receipt's "Cash" claim (K3), keep both visible.
+  const noteAdd =
+    `[Rapido receipt Rs.${parsed.rapidoAmount}${variance !== 0 ? ` variance ${variance >= 0 ? '+' : ''}${variance}` : ''}${parsed.claimedMode !== 'UNKNOWN' ? ` (receipt claimed ${parsed.claimedMode}, bank wins)` : ''}${parsed.receiptId ? ` #${parsed.receiptId}` : ''}]`.slice(0, 200);
+  try {
+    const update: Record<string, unknown> = {};
+    const current = await Transaction.findOne({ _id: match._id, userId }).lean();
+    if (current) {
+      const notes = `${current.notes ?? ''} ${noteAdd}`.slice(0, 500);
+      update.notes = notes;
+      if (current.category === 'Other') update.category = 'Rapido';
+      await Transaction.updateOne({ _id: match._id, userId }, { $set: update });
+    }
+  } catch {
+    // annotation is best-effort; link already stored
+  }
+
+  return {
+    httpStatus: 201,
+    response: {
+      data: {
+        status: 'linked' as const,
+        receiptDbId: row._id.toString(),
+        linkedTransactionId: match._id.toString(),
+        variance,
+        parsed,
+      },
+      error: null,
+      message:
+        variance === 0
+          ? 'Receipt linked to bank debit'
+          : `Receipt linked (bank differs by ${variance >= 0 ? '+' : ''}${variance} — kept both)`,
+    },
+  };
+}
+
+/** 1MB decoded cap: invoice PDFs are ~300KB; anything bigger is not an invoice. */
+const MAX_PDF_BYTES = 1024 * 1024;
+
+/**
+ * Plain text of an invoice PDF. Exported for tests. pdf-parse is pure JS and
+ * runs on serverless; teardown is best-effort so a parser hiccup never hangs.
+ */
+export async function extractRapidoPdfText(buf: Buffer): Promise<string> {
+  const parser = new PDFParse({ data: buf });
+  try {
+    const { text } = await parser.getText();
+    return text ?? '';
+  } finally {
+    try {
+      await parser.destroy();
+    } catch {
+      // ignore teardown errors
+    }
+  }
+}
+
+/**
+ * POST /api/ingest/rapido-pdf — Rapido invoice PDF as base64 (iPhone Shortcut:
+ * Email Attachments → Base64 encode → pdfBase64, typed subject). Apple Mail's
+ * Shortcuts Content is empty for HTML-only mail, but the PDF attachment
+ * carries everything. Same store + bank-link flow as /api/ingest/rapido.
+ */
+export async function ingestRapidoPdf(req: Request, res: Response) {
+  await connectDB();
+
+  const userId = await authorizeIngest(req, res);
+  if (!userId) return;
+
+  const { subject, pdfBase64 } = req.body as { subject: string; pdfBase64: string };
+
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(pdfBase64)) {
+    return res.status(400).json({
+      data: null,
+      error: 'Invalid PDF data',
+      errorCode: 'PDF_INVALID',
+      suggestion: 'Send the invoice PDF base64-encoded.',
+      requestId: req.requestId,
+    });
+  }
+  const buf = Buffer.from(pdfBase64, 'base64');
+  if (buf.length === 0 || buf.length > MAX_PDF_BYTES) {
+    return res.status(400).json({
+      data: null,
+      error: 'PDF too large or empty',
+      errorCode: 'PDF_TOO_LARGE',
+      suggestion: 'Send a single invoice PDF (max 1MB decoded).',
+      requestId: req.requestId,
+    });
+  }
+
+  let text: string;
+  try {
+    text = await extractRapidoPdfText(buf);
+  } catch {
+    return res.status(400).json({
+      data: null,
+      error: 'Could not read PDF',
+      errorCode: 'PDF_UNREADABLE',
+      suggestion: 'Send a valid invoice PDF.',
+      requestId: req.requestId,
+    });
+  }
+
+  const storeBody = stripToText(text).slice(0, 8000);
+  const hash = contentHash(subject, storeBody);
+  const parsed = text.trim() ? parseRapidoEmail(subject, text) : null;
+
+  // Replay-safe: same PDF twice → same row, no second link.
+  const existing = await RapidoReceipt.findOne({ userId, receiptHash: hash }).lean();
+  if (existing) {
+    return res.status(200).json({
+      data: {
+        status: 'duplicate' as const,
+        reason: 'same receipt already processed',
+        receiptDbId: existing._id.toString(),
+        linkedTransactionId: existing.linkedTransactionId?.toString() ?? null,
+      },
+      error: null,
+      message: 'Duplicate receipt ignored',
+    });
+  }
+
+  const out = await reconcileParsedRapido({
+    userId,
+    hash,
+    subject,
+    storeBody,
+    parsed,
+    unparsedReason: 'PDF had no readable Rapido text.',
+  });
+  return res.status(out.httpStatus).json(out.response);
 }

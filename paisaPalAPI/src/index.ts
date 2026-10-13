@@ -42,10 +42,11 @@ app.use(
 );
 
 app.use(express.json({
-  // 100kb (not the 10kb default): email ingest endpoints (/api/ingest/rapido,
-  // /api/ingest/receipt) accept HTML mail bodies. Normal API payloads are
-  // bytes-to-KBs; abuse surface is unchanged behind /api rate limiting.
-  limit: '100kb',
+  // 600kb (not the 10kb default): email ingest endpoints accept HTML mail
+  // bodies, and /api/ingest/rapido-pdf accepts a base64 invoice PDF (~380KB).
+  // Normal API payloads are bytes-to-KBs; abuse surface is unchanged behind
+  // /api rate limiting, and controllers enforce their own tighter caps.
+  limit: '600kb',
 }));
 
 app.use(requestLogger);
