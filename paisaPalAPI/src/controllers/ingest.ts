@@ -6,10 +6,10 @@ import {
   shiftDateKey,
 } from '../lib/ingestAuth';
 import { stripToText } from '../lib/htmlText';
-import { PDFParse } from 'pdf-parse';
 import { connectDB } from '../lib/mongodb';
 import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
 import { parseRapidoEmail, type ParsedRapidoReceipt } from '../lib/rapidoParser';
+import { extractText as extractPdfTextContent } from 'unpdf';
 import { parseSms } from '../lib/smsParser';
 import RapidoReceipt from '../models/RapidoReceipt';
 import SmsInbox from '../models/SmsInbox';
@@ -504,21 +504,16 @@ async function reconcileParsedRapido(args: {
 const MAX_PDF_BYTES = 1024 * 1024;
 
 /**
- * Plain text of an invoice PDF. Exported for tests. pdf-parse is pure JS and
- * runs on serverless; teardown is best-effort so a parser hiccup never hangs.
+ * Plain text of an invoice PDF. Exported for tests.
+ *
+ * Uses unpdf (pure JS, no native canvas/DOM deps) instead of pdf-parse:
+ * pdf-parse v2 requires DOMMatrix/@napi-rs/canvas, which Vercel's serverless
+ * Node runtime lacks — its top-level import crashed every /api route at boot.
  */
 export async function extractRapidoPdfText(buf: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buf });
-  try {
-    const { text } = await parser.getText();
-    return text ?? '';
-  } finally {
-    try {
-      await parser.destroy();
-    } catch {
-      // ignore teardown errors
-    }
-  }
+  const { text } = await extractPdfTextContent(new Uint8Array(buf));
+  if (Array.isArray(text)) return text.join('\n');
+  return text ?? '';
 }
 
 /**
