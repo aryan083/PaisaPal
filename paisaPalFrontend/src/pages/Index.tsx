@@ -11,11 +11,10 @@ import { SavingsPage } from './SavingsPage'
 import { EnvelopesPage } from './EnvelopesPage'
 import { InsightsPage } from './InsightsPage'
 import { SettingsPage } from './SettingsPage'
-import { InboxPage } from './InboxPage'
 import { AuthPage } from './AuthPage'
 
 const Index = () => {
-  const { activeTab, theme, init, applySnapshot, setSnapshotView } = useStore()
+  const { activeTab, theme, init, applySnapshot, setSnapshotView, setActiveTab } = useStore()
   const { isAuthenticated, checkAuth, token, hasHydrated, isLoading } = useAuthStore()
 
   const snapshotFromUrl = () => {
@@ -34,6 +33,10 @@ const Index = () => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
+
+  useEffect(() => {
+    if (activeTab === 'inbox') setActiveTab('transactions')
+  }, [activeTab, setActiveTab])
 
   useEffect(() => {
     const pending = snapshotFromUrl() ?? snapshotFromSession()
@@ -145,7 +148,6 @@ const Index = () => {
       {activeTab === 'envelopes' && <EnvelopesPage />}
       {activeTab === 'insights' && <InsightsPage />}
       {activeTab === 'settings' && <SettingsPage />}
-      {activeTab === 'inbox' && <InboxPage />}
     </AppShell>
   )
 }

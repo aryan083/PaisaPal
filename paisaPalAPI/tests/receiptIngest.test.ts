@@ -46,7 +46,7 @@ describe('POST /api/ingest/receipt', () => {
     expect(res.status).toBe(401);
   });
 
-  it('stores Swiggy receipt as pending_bank when no debit exists', async () => {
+  it('creates a transaction directly from a parsed Swiggy receipt', async () => {
     const res = await request(app)
       .post('/api/ingest/receipt')
       .set('x-ingest-secret', INGEST_SECRET)
@@ -56,10 +56,10 @@ describe('POST /api/ingest/receipt', () => {
         body: 'Swiggy order on 08-Oct-2026. Order total Rs.299. Order ID SW123456.',
       });
     expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.status).toBe('linked');
     expect(res.body.data.parsed.app).toBe('SWIGGY');
     expect(res.body.data.parsed.amount).toBe(299);
-    expect(await Transaction.countDocuments({})).toBe(0);
+    expect(await Transaction.countDocuments({})).toBe(1);
   });
 
   it('links Amazon receipt to exact bank debit and sets Shopping', async () => {
@@ -91,7 +91,7 @@ describe('POST /api/ingest/receipt', () => {
     expect(tx?.notes).toContain('AMAZON');
   });
 
-  it('does not link when amount differs beyond tolerance', async () => {
+  it('creates a receipt transaction when no bank debit is within tolerance', async () => {
     await Transaction.create({
       userId: TEST_USER_ID,
       date: new Date(Date.UTC(2026, 9, 8, 6, 30, 0)),
@@ -111,7 +111,8 @@ describe('POST /api/ingest/receipt', () => {
         body: 'Flipkart order total Rs.999. Order ID OD123.',
       });
     expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.status).toBe('linked');
+    expect(await Transaction.countDocuments({})).toBe(2);
   });
 
   it('quarantines promo emails without amounts', async () => {
@@ -145,7 +146,7 @@ describe('POST /api/ingest/receipt', () => {
       .set('x-ingest-secret', INGEST_SECRET)
       .send({ subject: 'Your Amazon.in order #402-1234567-1234567', body: bigHtml });
     expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.status).toBe('linked');
     expect(res.body.data.parsed.app).toBe('AMAZON');
     expect(res.body.data.parsed.amount).toBe(499);
 

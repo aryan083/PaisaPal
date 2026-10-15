@@ -47,7 +47,7 @@ describe('POST /api/ingest/rapido', () => {
     expect(res.status).toBe(401);
   });
 
-  it('stores receipt as pending_bank when no bank debit exists yet', async () => {
+  it('creates a transaction directly from a parsed receipt when no bank debit exists', async () => {
     const res = await request(app)
       .post('/api/ingest/rapido')
       .set('x-ingest-secret', INGEST_SECRET)
@@ -56,9 +56,9 @@ describe('POST /api/ingest/rapido', () => {
         body: 'Rapido trip on 08-Oct-2026. Pickup: HSR Layout. Drop: Koramangala. Total fare Rs.65. Payment mode: Cash.',
       });
     expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.status).toBe('linked');
     expect(res.body.data.parsed.rapidoAmount).toBe(65);
-    expect(await Transaction.countDocuments({})).toBe(0);
+    expect(await Transaction.countDocuments({})).toBe(1);
     expect(await RapidoReceipt.countDocuments({})).toBe(1);
   });
 
@@ -188,7 +188,7 @@ describe('real Rapido invoice templates (sanitized, Oct 2026)', () => {
       .set('x-ingest-secret', INGEST_SECRET)
       .send({ subject: 'Rapido Invoice', body: INVOICE_QR_PAY });
     expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.status).toBe('linked');
     const parsed = res.body.data.parsed;
     expect(parsed.rapidoAmount).toBe(54);
     expect(parsed.receiptId).toBe('RD17918988593214218');
@@ -246,7 +246,7 @@ describe('real Rapido invoice templates (sanitized, Oct 2026)', () => {
       .set('x-ingest-secret', INGEST_SECRET)
       .send({ subject: 'Rapido Invoice', body: bigHtml });
     expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending_bank');
+    expect(res.body.data.status).toBe('linked');
     expect(res.body.data.parsed.rapidoAmount).toBe(54);
     expect(res.body.data.parsed.receiptId).toBe('RD17918988593214218');
 

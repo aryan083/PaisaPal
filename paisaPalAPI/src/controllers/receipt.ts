@@ -7,18 +7,40 @@ import {
 } from '../lib/ingestAuth';
 import { connectDB } from '../lib/mongodb';
 import { stripToText } from '../lib/htmlText';
+import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
 import { parseReceiptEmail } from '../lib/receiptParser';
 import AppReceipt from '../models/AppReceipt';
+import Settings from '../models/Settings';
 import Transaction from '../models/Transaction';
 
 /** Amount window for app receipts: e-commerce UPI charges are exact. */
 const AMOUNT_TOLERANCE = 2;
 
+async function createReceiptTransaction(userId: string, parsed: NonNullable<ReturnType<typeof parseReceiptEmail>>) {
+  const date = new Date(`${parsed.dateKey}T00:00:00.000Z`);
+  const transaction = await Transaction.create({
+    userId,
+    date,
+    dateKey: parsed.dateKey,
+    particulars: `${parsed.app} receipt`,
+    amount: parsed.amount,
+    category: parsed.categoryGuess,
+    modes: ['Online'],
+    notes: `[${parsed.app} receipt Rs.${parsed.amount}${parsed.orderId ? ` #${parsed.orderId}` : ''}]`,
+  });
+  void (async () => {
+    try {
+      const settings = await Settings.findOne({ userId }).lean();
+      await syncEnvelopeForTransaction(userId, transaction.date, transaction.category, settings?.envelopeWarningThreshold ?? 80);
+    } catch { /* secondary bookkeeping is best-effort */ }
+  })();
+  return transaction;
+}
+
 /**
  * POST /api/ingest/receipt — shopping/food receipt (email subject + body).
- * Same ingest-secret auth. NEVER creates a Transaction (bank = truth):
- * stores the receipt and links it to the closest bank debit
- * (±1 day, ±₹2). Unmatched receipts wait as pending_bank.
+ * Same ingest-secret auth. A matching bank debit remains preferred; otherwise
+ * a parsed receipt is recorded immediately as a Transaction.
  */
 export async function ingestReceipt(req: Request, res: Response) {
   await connectDB();
@@ -105,6 +127,7 @@ export async function ingestReceipt(req: Request, res: Response) {
   const match = candidates[0] ?? null;
 
   if (!match) {
+    const transaction = await createReceiptTransaction(userId, parsed);
     const row = await AppReceipt.create({
       userId,
       receiptHash: hash,
@@ -114,22 +137,22 @@ export async function ingestReceipt(req: Request, res: Response) {
       orderDateKey: parsed.dateKey,
       amount: parsed.amount,
       orderId: parsed.orderId,
-      linkedTransactionId: null,
-      variance: null,
-      status: 'pending_bank',
+      linkedTransactionId: transaction._id,
+      variance: 0,
+      status: 'linked',
       parseError: null,
     });
     return res.status(201).json({
       data: {
-        status: 'pending_bank' as const,
-        reason: 'No bank debit within ±1 day / ±₹2 yet — links when the SMS arrives.',
+        status: 'linked' as const,
+        reason: 'No matching bank debit — transaction created directly from receipt.',
         receiptDbId: row._id.toString(),
-        linkedTransactionId: null,
-        variance: null,
+        linkedTransactionId: transaction._id.toString(),
+        variance: 0,
         parsed,
       },
       error: null,
-      message: 'Receipt stored, waiting for bank debit',
+      message: 'Transaction created from receipt',
     });
   }
 

@@ -8,11 +8,13 @@ import {
 import { stripToText } from '../lib/htmlText';
 import { connectDB } from '../lib/mongodb';
 import { syncEnvelopeForTransaction } from '../lib/envelopeSync';
+import { applyRapidoTaxContribution } from '../lib/rapidoTax';
 import { parseRapidoEmail, type ParsedRapidoReceipt } from '../lib/rapidoParser';
 import { extractText as extractPdfTextContent } from 'unpdf';
 import { parseSms } from '../lib/smsParser';
 import RapidoReceipt from '../models/RapidoReceipt';
 import SmsInbox from '../models/SmsInbox';
+import Settings from '../models/Settings';
 import Transaction from '../models/Transaction';
 
 export async function ingestSms(req: Request, res: Response) {
@@ -260,6 +262,7 @@ export async function ingestRapido(req: Request, res: Response) {
   const match = candidates[0] ?? null;
 
   if (!match) {
+    const transaction = await createRapidoTransaction(userId, parsed);
     const row = await RapidoReceipt.create({
       userId,
       receiptHash: hash,
@@ -269,22 +272,22 @@ export async function ingestRapido(req: Request, res: Response) {
       rapidoAmount: parsed.rapidoAmount,
       claimedMode: parsed.claimedMode,
       receiptId: parsed.receiptId,
-      linkedTransactionId: null,
-      variance: null,
-      status: 'pending_bank',
+      linkedTransactionId: transaction._id,
+      variance: 0,
+      status: 'linked',
       parseError: null,
     });
     return res.status(201).json({
       data: {
-        status: 'pending_bank' as const,
-        reason: 'No bank debit within ±1 day / ±₹10 yet — will link when the SMS arrives.',
+        status: 'linked' as const,
+        reason: 'No matching bank debit — transaction created directly from receipt.',
         receiptDbId: row._id.toString(),
-        linkedTransactionId: null,
-        variance: null,
+        linkedTransactionId: transaction._id.toString(),
+        variance: 0,
         parsed,
       },
       error: null,
-      message: 'Receipt stored, waiting for bank debit',
+      message: 'Transaction created from receipt',
     });
   }
 
@@ -342,6 +345,30 @@ type RapidoReconcileOutcome = {
   httpStatus: 200 | 201;
   response: { data: unknown; error: null; message: string };
 };
+
+/** Parsed receipts are expenses in their own right: create immediately when
+ * there is no matching bank SMS, keeping the receipt linked for provenance. */
+async function createRapidoTransaction(userId: string, parsed: ParsedRapidoReceipt) {
+  const date = new Date(`${parsed.dateKey}T00:00:00.000Z`);
+  const transaction = await Transaction.create({
+    userId,
+    date,
+    dateKey: parsed.dateKey,
+    particulars: 'Rapido ride',
+    amount: parsed.rapidoAmount,
+    category: 'Rapido',
+    modes: [parsed.claimedMode === 'Cash' ? 'Cash' : 'Online'],
+    notes: `[Rapido receipt Rs.${parsed.rapidoAmount}${parsed.receiptId ? ` #${parsed.receiptId}` : ''}]`,
+  });
+  void (async () => {
+    try {
+      const settings = await Settings.findOne({ userId }).lean();
+      await syncEnvelopeForTransaction(userId, transaction.date, transaction.category, settings?.envelopeWarningThreshold ?? 80);
+      await applyRapidoTaxContribution({ userId, amount: transaction.amount, transactionId: transaction._id.toString() });
+    } catch { /* secondary bookkeeping is best-effort */ }
+  })();
+  return transaction;
+}
 
 /**
  * Shared store + bank-link flow for a parsed Rapido receipt, whatever carrier
@@ -416,6 +443,7 @@ async function reconcileParsedRapido(args: {
   const match = candidates[0] ?? null;
 
   if (!match) {
+    const transaction = await createRapidoTransaction(userId, parsed);
     const row = await RapidoReceipt.create({
       userId,
       receiptHash: hash,
@@ -425,24 +453,24 @@ async function reconcileParsedRapido(args: {
       rapidoAmount: parsed.rapidoAmount,
       claimedMode: parsed.claimedMode,
       receiptId: parsed.receiptId,
-      linkedTransactionId: null,
-      variance: null,
-      status: 'pending_bank',
+      linkedTransactionId: transaction._id,
+      variance: 0,
+      status: 'linked',
       parseError: null,
     });
     return {
       httpStatus: 201,
       response: {
         data: {
-          status: 'pending_bank' as const,
-          reason: 'No bank debit within ±1 day / ±₹10 yet — will link when the SMS arrives.',
+          status: 'linked' as const,
+          reason: 'No matching bank debit — transaction created directly from receipt.',
           receiptDbId: row._id.toString(),
-          linkedTransactionId: null,
-          variance: null,
+          linkedTransactionId: transaction._id.toString(),
+          variance: 0,
           parsed,
         },
         error: null,
-        message: 'Receipt stored, waiting for bank debit',
+        message: 'Transaction created from receipt',
       },
     };
   }
