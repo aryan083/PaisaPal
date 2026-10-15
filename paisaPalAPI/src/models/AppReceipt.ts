@@ -1,6 +1,6 @@
 import mongoose, { type Document, type Model, Schema } from 'mongoose';
 
-export type AppReceiptStatus = 'linked' | 'pending_bank' | 'needs_review';
+export type AppReceiptStatus = 'linked' | 'pending_bank' | 'needs_review' | 'dismissed';
 
 export interface IAppReceipt extends Document {
   userId: mongoose.Types.ObjectId;
@@ -35,7 +35,7 @@ const appReceiptSchema = new Schema<IAppReceipt>(
     status: {
       type: String,
       required: true,
-      enum: ['linked', 'pending_bank', 'needs_review'],
+      enum: ['linked', 'pending_bank', 'needs_review', 'dismissed'],
       default: 'pending_bank',
     },
     parseError: { type: String, default: null, maxlength: 500 },

@@ -1,12 +1,13 @@
 import { useStore } from '@/store'
 import { useAuthStore } from '@/stores/authStore'
-import { LayoutDashboard, Receipt, TrendingUp, Settings, Moon, Sun, Repeat, Wallet, LogOut, User, ChevronLeft, ChevronRight, Menu, PiggyBank, RefreshCw } from 'lucide-react'
+import { LayoutDashboard, Receipt, TrendingUp, Settings, Moon, Sun, Repeat, Wallet, LogOut, User, ChevronLeft, ChevronRight, PiggyBank, RefreshCw, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TabId } from '@/types'
 
 const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'transactions', label: 'Transactions', icon: Receipt },
+  { id: 'inbox', label: 'Review Inbox', icon: Inbox },
   { id: 'savings', label: 'Savings', icon: PiggyBank },
   { id: 'recurring', label: 'Recurring', icon: RefreshCw },
   { id: 'envelopes', label: 'Envelopes', icon: Wallet },

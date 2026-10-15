@@ -1,6 +1,6 @@
 import mongoose, { type Document, type Model, Schema } from 'mongoose';
 
-export type SmsInboxStatus = 'posted' | 'duplicate' | 'needs_review';
+export type SmsInboxStatus = 'posted' | 'duplicate' | 'needs_review' | 'dismissed';
 
 export interface ISmsInbox extends Document {
   userId: mongoose.Types.ObjectId;
@@ -32,7 +32,7 @@ const smsInboxSchema = new Schema<ISmsInbox>(
     status: {
       type: String,
       required: true,
-      enum: ['posted', 'duplicate', 'needs_review'],
+      enum: ['posted', 'duplicate', 'needs_review', 'dismissed'],
       default: 'posted',
     },
     transactionId: { type: Schema.Types.ObjectId, ref: 'Transaction', default: null },

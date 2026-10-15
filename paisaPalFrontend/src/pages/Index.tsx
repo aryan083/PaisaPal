@@ -11,6 +11,7 @@ import { SavingsPage } from './SavingsPage'
 import { EnvelopesPage } from './EnvelopesPage'
 import { InsightsPage } from './InsightsPage'
 import { SettingsPage } from './SettingsPage'
+import { InboxPage } from './InboxPage'
 import { AuthPage } from './AuthPage'
 
 const Index = () => {
@@ -144,6 +145,7 @@ const Index = () => {
       {activeTab === 'envelopes' && <EnvelopesPage />}
       {activeTab === 'insights' && <InsightsPage />}
       {activeTab === 'settings' && <SettingsPage />}
+      {activeTab === 'inbox' && <InboxPage />}
     </AppShell>
   )
 }

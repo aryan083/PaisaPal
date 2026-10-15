@@ -73,6 +73,41 @@ export type ApiTransaction = {
   updatedAt: string;
 };
 
+export type InboxKind = 'sms' | 'rapido' | 'receipt';
+export type ApiInboxItem = {
+  kind: InboxKind;
+  id: string;
+  status: 'linked' | 'pending_bank' | 'needs_review' | 'dismissed' | 'posted' | 'duplicate';
+  dateKey: string | null;
+  amount: number | null;
+  title: string;
+  detail: string;
+  parsed: Record<string, string | null>;
+  transactionId: string | null;
+  variance: number | null;
+  rawExcerpt: string;
+  createdAt: string;
+  candidates: ApiTransaction[];
+};
+
+export type InboxResponse = { items: ApiInboxItem[]; total: number; page: number; pages: number };
+export type InboxParams = { status?: string; kind?: InboxKind; page?: number; limit?: number };
+export type InboxApprovePayload = { transactionId?: string; transaction?: Partial<Pick<ApiTransaction, 'date' | 'particulars' | 'amount' | 'category' | 'modes' | 'notes'>> };
+
+export async function fetchInbox(params: InboxParams = {}): Promise<InboxResponse> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+  const res = await requestJson<InboxResponse>(`/ingest/inbox${query.size ? `?${query}` : ''}`);
+  return res.data!;
+}
+
+export async function approveInbox(kind: InboxKind, id: string, action: 'link' | 'create' | 'dismiss', payload: InboxApprovePayload = {}): Promise<{ item: ApiInboxItem; transaction?: ApiTransaction }> {
+  const res = await requestJson<{ item: ApiInboxItem; transaction?: ApiTransaction }>(`/ingest/inbox/${kind}/${id}/approve`, {
+    method: 'POST', body: JSON.stringify({ action, ...payload }),
+  });
+  return res.data!;
+}
+
 export type ListTransactionsData = {
   transactions: ApiTransaction[];
   total: number;

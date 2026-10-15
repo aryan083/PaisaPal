@@ -107,6 +107,33 @@ export type BulkDeleteTransactionsInput = z.infer<
 
 export type TransactionUpdateInput = z.infer<typeof TransactionUpdateSchema>;
 
+export const InboxQuerySchema = z.object({
+  status: z.enum(['linked', 'pending_bank', 'needs_review', 'dismissed', 'posted', 'duplicate', 'actionable']).optional(),
+  kind: z.enum(['sms', 'rapido', 'receipt']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const InboxApproveSchema = z.object({
+  action: z.enum(['link', 'create', 'dismiss']),
+  transactionId: z.string().min(1).optional(),
+  transaction: z.object({
+    date: DDMMYYYYDateSchema.optional(),
+    particulars: z.string().min(1).max(200).optional(),
+    amount: z.number().min(0).optional(),
+    category: CategorySchema.optional(),
+    modes: z.array(ModeSchema).min(1).optional(),
+    notes: z.string().max(500).optional(),
+  }).optional(),
+}).superRefine((value, ctx) => {
+  if (value.action === 'link' && !value.transactionId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'transactionId is required when linking', path: ['transactionId'] });
+  }
+});
+
+export type InboxQuery = z.infer<typeof InboxQuerySchema>;
+export type InboxApproveInput = z.infer<typeof InboxApproveSchema>;
+
 export const RemapCategorySchema = z.object({
   fromCategory: CategorySchema,
   toCategory: CategorySchema,

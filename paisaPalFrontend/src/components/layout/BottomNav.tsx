@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '@/store'
-import { LayoutDashboard, Receipt, Settings, Wallet, PiggyBank, RefreshCw, TrendingUp, MoreHorizontal } from 'lucide-react'
+import { LayoutDashboard, Receipt, Settings, Wallet, PiggyBank, RefreshCw, TrendingUp, MoreHorizontal, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { TabId } from '@/types'
@@ -14,6 +14,7 @@ const PRIMARY_TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 ]
 
 const MORE_TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: 'inbox', label: 'Review Inbox', icon: Inbox },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]

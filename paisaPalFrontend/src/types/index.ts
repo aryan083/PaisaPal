@@ -213,6 +213,7 @@ export type TabId =
   | 'settings'
   | 'savings'
   | 'envelopes'
+  | 'inbox'
 
 export const DEFAULT_CATEGORY_HEX: Record<(typeof DEFAULT_CATEGORIES)[number], string> = {
   'Rapido': '#ff6b35',
