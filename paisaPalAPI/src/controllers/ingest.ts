@@ -540,6 +540,16 @@ export async function ingestRapidoPdf(req: Request, res: Response) {
     });
   }
   const buf = Buffer.from(pdfBase64, 'base64');
+  // TEMP-PDF-DEBUG (remove after live verify): fingerprint what the phone
+  // actually sent — base64 length + decoded magic bytes only, never content.
+  // Real invoice PDF starts with 255044462d312e34 ("%PDF-1.4").
+  try {
+    console.log(
+      `[ingest-pdf-debug] b64len=${pdfBase64.length} declen=${buf.length} magic=${buf.subarray(0, 8).toString('hex')} b64prefix=${pdfBase64.slice(0, 24)}`,
+    );
+  } catch {
+    // logging must never break ingestion
+  }
   if (buf.length === 0 || buf.length > MAX_PDF_BYTES) {
     return res.status(400).json({
       data: null,
